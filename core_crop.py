@@ -4,6 +4,7 @@ import math
 import cv2
 import numpy as np
 from pathlib import Path
+import matplotlib.pyplot as plt
 
 # Standard microscope channel mappings
 CHANNEL_MAP = {
@@ -109,7 +110,7 @@ def detect_center_square(cached_gray: np.ndarray, sq_len: int, roi_size: int = 6
 
     for cnt in contours:
         area = cv2.contourArea(cnt)
-        if area < min_area or area > max_area:
+        if area < min_area: # or area > max_area:
             continue
 
         (cx, cy), (w, h), _ = cv2.minAreaRect(cnt)
