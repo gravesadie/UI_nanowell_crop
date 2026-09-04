@@ -13,16 +13,16 @@ CHANNEL_MAP = {
     'RGB': 'RGB'
 }
 
-def load_bf_image(img_dir: str, well_name: str, day: str):
+def load_bf_image(img_dir: str, well_name: str, time: str):
     """
     Loads the Brightfield tile matrix image in 8-bit mode.
     Returns (cached_bgr, cached_gray, full_path, error_message).
     """
     img_dir = img_dir.strip().replace('\\', '/')
     well_name = well_name.strip()
-    day = day.strip()
+    time = time.strip()
 
-    bf_name = f"{well_name}_Day{day}_BF.tif"
+    bf_name = f"{well_name}_Time{time}_BF.tif"
     full_path = os.path.join(img_dir, bf_name)
 
     if not os.path.exists(full_path):
@@ -44,12 +44,12 @@ def load_bf_image(img_dir: str, well_name: str, day: str):
         return None, None, full_path, f"Critical read error: {e}"
 
 
-def rename_raw_files(directory: str, day: str, log_callback=print):
+def rename_raw_files(directory: str, time: str, log_callback=print):
     """
     Standardizes raw microscope export filenames in the target directory.
     """
     directory = directory.strip().replace('\\', '/')
-    day = day.strip()
+    time = time.strip()
     match_count = 0
 
     log_callback(f"[START]: Scanning files inside directory: {directory}")
@@ -59,7 +59,7 @@ def rename_raw_files(directory: str, day: str, log_callback=print):
             if not filename.lower().endswith('.tif'):
                 continue
 
-            match_check_good = re.match(r"[A-Z]\d{2}_Day\d+_(.*)\.tif$", filename)
+            match_check_good = re.match(r"[A-Z]\d{2}_Time\d+_(.*)\.tif$", filename)
             if match_check_good and match_check_good.group(1) in {"RGB", "BF", "GFP", "mCherry"}:
                 match_count += 1
                 continue
@@ -68,7 +68,7 @@ def rename_raw_files(directory: str, day: str, log_callback=print):
             if match_check:
                 well, rest = match_check.group(1), match_check.group(3)
                 channel = CHANNEL_MAP.get(rest, "UNKNOWN")
-                new_filename = f"{well}_Day{day}_{channel}.tif"
+                new_filename = f"{well}_Time{time}_{channel}.tif"
                 match_count += 1
                 os.rename(os.path.join(directory, filename), os.path.join(directory, new_filename))
                 log_callback(f"-> Renamed successfully: '{filename}' to '{new_filename}'")
@@ -222,7 +222,7 @@ def generate_grid_overlay(cached_bgr: np.ndarray, cx: int, cy: int, angle_val: f
     return valid_wells, render_img
 
 
-def execute_nanowell_crop(load_path: str, well_name: str, day: str, nanowell_r: int,
+def execute_nanowell_crop(load_path: str, well_name: str, time: str, nanowell_r: int,
                           output_size: int, valid_wells: list, log_callback=print):
     """
     Crops and exports masked single-well images across all matched channels.
@@ -233,7 +233,7 @@ def execute_nanowell_crop(load_path: str, well_name: str, day: str, nanowell_r: 
     half_size = output_size // 2
 
     files = os.listdir(load_path)
-    pattern = rf"^{well_name}_Day{day}_(.*)\.tif$"
+    pattern = rf"^{well_name}_Time{time}_(.*)\.tif$"
     matched_channels = {}
 
     for filename in files:
@@ -269,7 +269,7 @@ def execute_nanowell_crop(load_path: str, well_name: str, day: str, nanowell_r: 
             square_crop = image[y1:y2, x1:x2]
             cropped_with_mask = cv2.bitwise_and(square_crop, square_crop, mask=digital_mask)
 
-            new_filename = f"{well_name}_R{row}_C{col}_Day{day}_{key_channel}.png"
+            new_filename = f"{well_name}_R{row}_C{col}_Time{time}_{key_channel}.png"
             new_folder = os.path.join(save_base_path, key_channel)
             save_path = os.path.join(new_folder, new_filename)
             cv2.imwrite(save_path, cropped_with_mask)
@@ -279,7 +279,7 @@ def execute_nanowell_crop(load_path: str, well_name: str, day: str, nanowell_r: 
     log_callback(f"[COMPLETE 🏁]: All channels cropped. Destination root:\n{save_base_path}")
 
 
-def execute_rollback(load_path: str, well_name: str, day: str, log_callback=print):
+def execute_rollback(load_path: str, well_name: str, time: str, log_callback=print):
     """
     Safely purges exported single-well crops matching criteria from disk.
     """
@@ -299,7 +299,7 @@ def execute_rollback(load_path: str, well_name: str, day: str, log_callback=prin
             continue
 
         for img_name in os.listdir(channel_dir):
-            match_check = re.match(rf"{well_name}_(.*)_Day{day}_(.*)\.png$", img_name)
+            match_check = re.match(rf"{well_name}_(.*)_Time{time}_(.*)\.png$", img_name)
             if match_check:
                 os.remove(os.path.join(channel_dir, img_name))
                 purged_file_count += 1
@@ -311,4 +311,4 @@ def execute_rollback(load_path: str, well_name: str, day: str, log_callback=prin
     if purged_file_count > 0:
         log_callback(f"[ROLLBACK COMPLETE 🏁]: Purged {purged_file_count} files and {purged_folder_count} empty folders.")
     else:
-        log_callback(f"⚠️ [ROLLBACK WARNING]: No image files matched template: '{well_name}_R*_C*_Day{day}.png'")
+        log_callback(f"⚠️ [ROLLBACK WARNING]: No image files matched template: '{well_name}_R*_C*_Time{time}.png'")

@@ -22,6 +22,13 @@ A high-performance standalone GUI desktop tool designed to seamlessly process, a
 ## 📁 Input Data Requirements (Raw Images)
 Before running the processing engine, ensure your files are inside the same directory and adhere to the expected naming conventions. The software uses these patterns to automatically detect experimental groups.
 
+Generate stitched tif from original ND2 acquisition:
+1. Open multipoint image (ex. multiple xy positions in single ND2) to stitch from file explorer (not JOBS)
+2. Image > ND Processing > Large Image from Multipoint
+3. Open stitched image
+4. File > Save/Export to TIFF
+5. Toggle to save both Mono image and RGB image (former required for renaming), setting bit depth to 8-bit for both (required for compatibility)
+
 * **Supported Formats:** `.tif` (Optimized for high-resolution stitched slides).
 * **Supported Image names:** `Well[A-Z][0-9][0-9]_XXX_[Channel].tif` ( XXX can be anything. [Channel] has to be one of them in below)
 

@@ -64,11 +64,11 @@ class AIWorkerThread(QThread):
     finished_signal = pyqtSignal()
     error_signal = pyqtSignal(str)
 
-    def __init__(self, proc_dir, well_name, day, mode, model_dir, save_masks, cell_diameter):
+    def __init__(self, proc_dir, well_name, time, mode, model_dir, save_masks, cell_diameter):
         super().__init__()
         self.proc_dir = proc_dir
         self.well_name = well_name
-        self.day = day
+        self.time = time
         self.mode = mode
         self.model_dir = model_dir
         self.save_masks = save_masks
@@ -79,7 +79,7 @@ class AIWorkerThread(QThread):
             image_analysis.execute_ai_segmentation(
                 processed_wells_dir=self.proc_dir,
                 well_name=self.well_name,
-                day=self.day,
+                time=self.time,
                 mode=self.mode,
                 model_dir=self.model_dir,
                 save_masks=self.save_masks,
@@ -188,15 +188,15 @@ class MicroscopyApp(QMainWindow):
         h_rename1.addWidget(self.btn_browse_rename)
         layout.addLayout(h_rename1)
 
-        self.rename_day = QLineEdit()
-        self.rename_day.setPlaceholderText("e.g., 1 or 2")
+        self.rename_time = QLineEdit()
+        self.rename_time.setPlaceholderText("e.g., 1 or 2")
         self.btn_run_rename = QPushButton("Run Rename Task")
         self.btn_run_rename.setStyleSheet("background-color: #2E86C1; color: white; font-weight: bold;")
         self.btn_run_rename.clicked.connect(self.on_run_rename)
 
         h_rename2 = QHBoxLayout()
-        h_rename2.addWidget(QLabel("Day Index:"))
-        h_rename2.addWidget(self.rename_day)
+        h_rename2.addWidget(QLabel("Time Index:"))
+        h_rename2.addWidget(self.rename_time)
         h_rename2.addWidget(self.btn_run_rename)
         layout.addLayout(h_rename2)
 
@@ -211,10 +211,10 @@ class MicroscopyApp(QMainWindow):
         self.in_well_name.setPlaceholderText("e.g. A02 or C05")
         grid.addWidget(self.in_well_name, 0, 1)
 
-        grid.addWidget(QLabel("Day Index:"), 1, 0)
-        self.in_day = QLineEdit()
-        self.in_day.setPlaceholderText("e.g., 1 or 2")
-        grid.addWidget(self.in_day, 1, 1)
+        grid.addWidget(QLabel("Time Index:"), 1, 0)
+        self.in_time = QLineEdit()
+        self.in_time.setPlaceholderText("e.g., 1 or 2")
+        grid.addWidget(self.in_time, 1, 1)
 
         grid.addWidget(QLabel("Image Folder:"), 2, 0)
         self.in_img_dir = QLineEdit()
@@ -231,7 +231,7 @@ class MicroscopyApp(QMainWindow):
         grid.addWidget(self.in_well_r, 3, 1)
 
         grid.addWidget(QLabel("Boundary R (px):"), 4, 0)
-        self.in_bound_r = QLineEdit('7500')
+        self.in_bound_r = QLineEdit('9000')
         self.in_bound_r.setToolTip("Boundary outer radius (pixels)")
         grid.addWidget(self.in_bound_r, 4, 1)
 
@@ -350,10 +350,10 @@ class MicroscopyApp(QMainWindow):
         self.ai_well_name.setPlaceholderText("e.g. A02")
         grid_ai.addWidget(self.ai_well_name, 1, 1)
 
-        grid_ai.addWidget(QLabel("Day Index:"), 2, 0)
-        self.ai_day = QLineEdit()
-        self.ai_day.setPlaceholderText("e.g., 1 or 2")
-        grid_ai.addWidget(self.ai_day, 2, 1)
+        grid_ai.addWidget(QLabel("Time Index:"), 2, 0)
+        self.ai_time = QLineEdit()
+        self.ai_time.setPlaceholderText("e.g., 1 or 2")
+        grid_ai.addWidget(self.ai_time, 2, 1)
 
         layout.addLayout(grid_ai)
         layout.addWidget(QLabel("<hr>"))
@@ -459,7 +459,7 @@ class MicroscopyApp(QMainWindow):
             self.ai_processed_dir.setText(inferred_proc_dir)
 
         self.ai_well_name.setText(self.in_well_name.text().strip())
-        self.ai_day.setText(self.in_day.text().strip())
+        self.ai_time.setText(self.in_time.text().strip())
 
         # Select Mode 2 by default if historical Excel database exists; otherwise Mode 1
         proc_dir = self.ai_processed_dir.text().strip().replace('\\', '/')
@@ -512,13 +512,13 @@ class MicroscopyApp(QMainWindow):
     def ensure_image_loaded(self) -> bool:
         img_dir = self.in_img_dir.text().strip()
         well_name = self.in_well_name.text().strip()
-        day = self.in_day.text().strip()
+        time = self.in_time.text().strip()
 
-        if not img_dir or not well_name or not day:
-            self.log("❌ [WARNING]: Image Folder, Well Name, and Day Index must all be filled!")
+        if not img_dir or not well_name or not time:
+            self.log("❌ [WARNING]: Image Folder, Well Name, and Time Index must all be filled!")
             return False
 
-        bgr, gray, full_path, err = core_crop.load_bf_image(img_dir, well_name, day)
+        bgr, gray, full_path, err = core_crop.load_bf_image(img_dir, well_name, time)
         if err:
             self.log(f"❌ [ERROR]: {err}")
             return False
@@ -552,18 +552,18 @@ class MicroscopyApp(QMainWindow):
 
     def on_run_rename(self):
         raw_dir = self.rename_dir_input.text().strip()
-        day = self.rename_day.text().strip()
-        if not raw_dir or not day:
-            self.log("⚠️ [WARNING]: Target raw directory and Day index are required for renaming!")
+        time = self.rename_time.text().strip()
+        if not raw_dir or not time:
+            self.log("⚠️ [WARNING]: Target raw directory and Time index are required for renaming!")
             return
 
         self.btn_run_rename.setEnabled(False)
-        self.log(f"[STANDARDIZE]: Renaming image files in '{raw_dir}' for Day {day}...")
+        self.log(f"[STANDARDIZE]: Renaming image files in '{raw_dir}' for Time {time}...")
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
             core_crop.rename_raw_files(
                 directory=raw_dir,
-                day=day,
+                time=time,
                 log_callback=self.log
             )
         finally:
@@ -668,19 +668,19 @@ class MicroscopyApp(QMainWindow):
             return
 
         well_name = self.in_well_name.text().strip()
-        day = self.in_day.text().strip()
+        time = self.in_time.text().strip()
         load_path = self.in_img_dir.text().strip().replace('\\', '/')
         output_dir = os.path.join(os.path.dirname(load_path), "Processed Wells")
         well_target_dir = os.path.join(output_dir, well_name)
 
         # 1. check if the cropped image already exists
-        existing_crops = glob.glob(os.path.join(well_target_dir, "*", f"{well_name}_*_Day{day}_*.png"))
+        existing_crops = glob.glob(os.path.join(well_target_dir, "*", f"{well_name}_*_Time{time}_*.png"))
         
         if existing_crops:
             reply = QMessageBox.question(
                 self,
                 "Clean & Overwrite Existing Crops",
-                f"Found {len(existing_crops)} existing crop files for Well '{well_name}' (Day {day}).\n\n"
+                f"Found {len(existing_crops)} existing crop files for Well '{well_name}' (Time {time}).\n\n"
                 f"Do you want to purge all old crops and export the newly aligned {len(self.valid_wells)} nanowells?",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No  # highlight "No"
@@ -691,8 +691,8 @@ class MicroscopyApp(QMainWindow):
                 return
 
             # If "YES", remove all old images and save newly cropped images
-            self.log(f"[CLEANUP]: Purging previous crops for Day {day} before writing fresh crops...")
-            core_crop.execute_rollback(load_path, well_name, day, log_callback=self.log)
+            self.log(f"[CLEANUP]: Purging previous crops for Time {time} before writing fresh crops...")
+            core_crop.execute_rollback(load_path, well_name, time, log_callback=self.log)
 
         # start cropping
         self.btn_crop.setEnabled(False)
@@ -703,7 +703,7 @@ class MicroscopyApp(QMainWindow):
             core_crop.execute_nanowell_crop(
                 load_path=self.in_img_dir.text(),
                 well_name=self.in_well_name.text(),
-                day=self.in_day.text(),
+                time=self.in_time.text(),
                 nanowell_r=nanowell_r,
                 output_size=output_size,
                 valid_wells=self.valid_wells,
@@ -722,7 +722,7 @@ class MicroscopyApp(QMainWindow):
             core_crop.execute_rollback(
                 load_path=self.in_img_dir.text(),
                 well_name=self.in_well_name.text(),
-                day=self.in_day.text(),
+                time=self.in_time.text(),
                 log_callback=self.log
             )
         finally:
@@ -757,11 +757,11 @@ class MicroscopyApp(QMainWindow):
     def on_run_ai_analysis(self):
         proc_dir = self.ai_processed_dir.text().strip().replace('\\', '/')
         well_name = self.ai_well_name.text().strip()
-        day = self.ai_day.text().strip()
+        time = self.ai_time.text().strip()
         mode = self.mode_group.checkedId()
 
-        if not proc_dir or not well_name or not day:
-            self.log("❌ [WARNING]: Processed Wells Dir, Well Name, and Day Index must all be filled!")
+        if not proc_dir or not well_name or not time:
+            self.log("❌ [WARNING]: Processed Wells Dir, Well Name, and Time Index must all be filled!")
             return
 
         try: # get cell diameter
@@ -787,7 +787,7 @@ class MicroscopyApp(QMainWindow):
         self.ai_thread = AIWorkerThread(
             proc_dir=proc_dir,
             well_name=well_name,
-            day=day,
+            time=time,
             mode=mode,
             model_dir=self.models_dir,
             save_masks=self.cb_save_masks.isChecked(),

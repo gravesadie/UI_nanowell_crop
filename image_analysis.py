@@ -6,11 +6,11 @@ if export masks:
 
 Processed Wells/
 ├── AI Segmentations/
-│   └── A02_Day1_Masks/
-│       ├── A02_R0_C1_Day1_BF.png        <-- original input image
-│       ├── A02_R0_C1_Day1_BF_mask.png   <-- Corresponding mask (multiple cells marked with different color)
-│       ├── A02_R0_C2_Day1_BF.png
-│       └── A02_R0_C2_Day1_BF_mask.png
+│   └── A02_Time1_Masks/
+│       ├── A02_R0_C1_Time1_BF.png        <-- original input image
+│       ├── A02_R0_C1_Time1_BF_mask.png   <-- Corresponding mask (multiple cells marked with different color)
+│       ├── A02_R0_C2_Time1_BF.png
+│       └── A02_R0_C2_Time1_BF_mask.png
 └── A02_CellCount.xlsx
 
 """
@@ -55,7 +55,7 @@ def colorize_mask(mask: np.ndarray) -> np.ndarray:
     return colored_mask
 
 
-def execute_ai_segmentation(processed_wells_dir: str, well_name: str, day: str,
+def execute_ai_segmentation(processed_wells_dir: str, well_name: str, time: str,
                             mode: int, model_dir: str, save_masks: bool = False, 
                             cell_diameter: float = 30.0, log_callback=print, 
                             progress_callback=None, batch_size: int = 16):
@@ -64,9 +64,9 @@ def execute_ai_segmentation(processed_wells_dir: str, well_name: str, day: str,
     Modes:
       1: Single-cell filter mode (finds and exports wells containing exactly 1 cell).
       2: Process designated coordinates from an Excel file in 'Processed Wells'.
-      3: Process all valid cropped BF images matching well_name and day.
+      3: Process all valid cropped BF images matching well_name and time.
     Outputs/Updates Excel: Processed Wells/<well_name>_CellCount.xlsx
-    Optionally exports debug pairs to: Processed Wells/AI Segmentations/<well_name>_Day<day>_Masks/
+    Optionally exports debug pairs to: Processed Wells/AI Segmentations/<well_name>_Time<time>_Masks/
     """
     if not CELLPOSE_AVAILABLE:
         log_callback("❌ [ERROR]: 'cellpose' package is not installed in the active environment.")
@@ -74,7 +74,7 @@ def execute_ai_segmentation(processed_wells_dir: str, well_name: str, day: str,
 
     processed_wells_dir = processed_wells_dir.strip().replace('\\', '/')
     well_name = well_name.strip()
-    day = day.strip()
+    time = time.strip()
 
     bf_folder = os.path.join(processed_wells_dir, well_name, "BF")
     if not os.path.exists(bf_folder):
@@ -84,7 +84,7 @@ def execute_ai_segmentation(processed_wells_dir: str, well_name: str, day: str,
     # 1. Setup Mask Export Directory if requested
     mask_export_dir = ""
     if save_masks:
-        mask_export_dir = os.path.join(processed_wells_dir, "AI Segmentations", f"{well_name}_Day{day}_Masks")
+        mask_export_dir = os.path.join(processed_wells_dir, "AI Segmentations", f"{well_name}_Time{time}_Masks")
         Path(mask_export_dir).mkdir(parents=True, exist_ok=True)
         log_callback(f"📁 [MASKS]: Exporting validation masks to:\n{mask_export_dir}")
 
@@ -102,8 +102,8 @@ def execute_ai_segmentation(processed_wells_dir: str, well_name: str, day: str,
         model = models.CellposeModel(pretrained_model=model_path, gpu=False)
         log_callback("⚠️ [AI MODEL]: CUDA GPU unavailable. Model running in CPU mode.")
 
-    # 3. Gather image candidates matching pattern: <well_name>_<coordinate>_Day<day>_BF.png
-    pattern = rf"^{well_name}_(R[-]?\d+_C[-]?\d+)_Day{day}_BF\.png$"
+    # 3. Gather image candidates matching pattern: <well_name>_<coordinate>_Time<time>_BF.png
+    pattern = rf"^{well_name}_(R[-]?\d+_C[-]?\d+)_Time{time}_BF\.png$"
     available_files = {}
     for fname in os.listdir(bf_folder):
         m = re.match(pattern, fname)
@@ -112,7 +112,7 @@ def execute_ai_segmentation(processed_wells_dir: str, well_name: str, day: str,
             available_files[coord] = os.path.join(bf_folder, fname)
 
     if not available_files:
-        log_callback(f"⚠️ [WARNING]: No Bright-field images found for Well '{well_name}' Day '{day}'.")
+        log_callback(f"⚠️ [WARNING]: No Bright-field images found for Well '{well_name}' Time '{time}'.")
         return
 
     # 4. Filter target coordinates based on chosen mode
@@ -204,8 +204,8 @@ def execute_ai_segmentation(processed_wells_dir: str, well_name: str, day: str,
 
             results.append({
                 "Coordinate": coord,
-                f"Day{day}_Cell_Count": cell_count,
-                f"Day{day}_Cell_Area": total_cell_area
+                f"Time{time}_Cell_Count": cell_count,
+                f"Time{time}_Cell_Area": total_cell_area
             })
 
             # Export validation image pair if checkbox was checked
@@ -241,10 +241,10 @@ def execute_ai_segmentation(processed_wells_dir: str, well_name: str, day: str,
             df_merged = pd.merge(df_existing, df_new, on="Coordinate", how="outer")
             df_merged = df_merged.loc[:, ~df_merged.columns.duplicated()]
             df_merged.to_excel(output_excel_path, index=False)
-            log_callback(f"✅ [SUCCESS]: Updated existing workbook successfully with Day {day} metrics.")
+            log_callback(f"✅ [SUCCESS]: Updated existing workbook successfully with Time {time} metrics.")
         except Exception as e:
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            backup_excel_name = f"{well_name}_Day{day}_backup_{timestamp}.xlsx"
+            backup_excel_name = f"{well_name}_Time{time}_backup_{timestamp}.xlsx"
             backup_excel_path = os.path.join(processed_wells_dir, backup_excel_name)
 
             log_callback(f"⚠️ [WARNING]: Merge failed ({e}). Saving to separate backup file instead.")
