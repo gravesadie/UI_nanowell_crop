@@ -88,10 +88,11 @@ def execute_ai_segmentation(processed_wells_dir: str, well_name: str, time: str,
         Path(mask_export_dir).mkdir(parents=True, exist_ok=True)
         log_callback(f"📁 [MASKS]: Exporting validation masks to:\n{mask_export_dir}")
 
-    # 2. Locate and load the cpsam_v2 model
-    model_path = os.path.join(model_dir, "cpsam_v2")
+    # 2. Locate and load the cpsam model
+    model_version = "cpsam" # "cpsam_20260730_Huh7_8fov" # "cpsam_v2"
+    model_path = os.path.join(model_dir, model_version) 
     if not os.path.exists(model_path):
-        log_callback(f"❌ [ERROR]: Pre-trained model 'cpsam_v2' not found under: {model_dir}")
+        log_callback(f"❌ [ERROR]: Pre-trained model f{model_version} not found under: {model_dir}")
         return
 
     log_callback(f"[AI MODEL]: Initializing Cellpose model from '{model_path}'...")
