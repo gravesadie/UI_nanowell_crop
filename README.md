@@ -28,7 +28,7 @@ Before running the processing engine, ensure your files are inside the same dire
 | Channel | Standardized Channel Code | Optical Channel & Configuration Description |
 | :--- | :--- | :--- |
 | `RGB` | `RGB` | **Merged / Overlay Status**: A composite color image representing all captured channels merged together into a single frame for global previewing. |
-| <code>20&nbsp;Phase</code>| `BF` | **Brightfield Channel**: Transmitted light imaging mode using a **20X** objective lens, primarily utilized for structural tracking and grid calibration. |
+| <code>20&nbsp;Phase</code>| `BF` | **Brightfield Channel**: Transmitted light imaging mode using a **20X** objective lens, primarily utilized for structural tracking and grid calibration. Name needs to end with '_20X Phase' to be renamed as BF. |
 | `GFP` | `GFP` | **eGFP Fluorescence Channel**: Green fluorescent protein detection channel captured at a **20X** objective magnification, used to observe target cellular expressions. |
 | `mCherry` | `mCherry` | **mCherry Fluorescence Channel**: Red fluorescent protein detection channel captured at a **20X** objective magnification, optimized for tracking red fluorophore expressions. |
 > ⚠️ **Prerequisite Rule:** To perform any cropping operations, the **BF** (Brightfield) channel image **must be present** in the directory as it is strictly required for mathematical grid calibration. All other fluorescence channels (`GFP`, `mCherry`, `RGB`) are completely optional and can be included or omitted based on your experimental dataset.
