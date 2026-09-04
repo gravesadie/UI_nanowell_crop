@@ -1,6 +1,7 @@
 import os
 import sys
 import glob
+from pathlib import Path
 
 # Suppress low-level OpenCV C++ warnings and libtiff logs before importing cv2
 os.environ["OPENCV_LOG_LEVEL"] = "OFF"
@@ -15,9 +16,20 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QImage, QPixmap, QWheelEvent, QPainter
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+import matplotlib.pyplot as plt
 
 import core_crop
 import image_analysis
+from mcherry_analysis import (
+    load_mcherry_crop_and_mask,
+    analyze_mcherry_image,
+    plot_mcherry_analysis,
+    batch_analyze_mcherry,
+    save_mcherry_figure
+)
+
 
 import torch
 
@@ -136,9 +148,11 @@ class MicroscopyApp(QMainWindow):
 
         page1_widget = self.build_page1_cropping_ui()
         page2_widget = self.build_page2_analysis_ui()
+        page3_widget = self.build_page3_mcherry_ui()
 
         self.left_stack.addWidget(page1_widget)  # Index 0: Cropping Page
-        self.left_stack.addWidget(page2_widget)  # Index 1: AI Analysis Page
+        self.left_stack.addWidget(page2_widget)  # Index 1: AI segmentation Page
+        self.left_stack.addWidget(page3_widget)  # Index 2: mCherry puncta analysis page
 
         splitter.addWidget(self.left_stack)
 
@@ -449,6 +463,157 @@ class MicroscopyApp(QMainWindow):
         self.btn_back_page.clicked.connect(self.switch_to_page1)
         layout.addWidget(self.btn_back_page)
 
+        # navigate to mCherry analysis
+        self.btn_mcherry_page = QPushButton(
+            "🔴 Continue to mCherry Puncta Analysis"
+        )
+        self.btn_mcherry_page.setStyleSheet(
+            "background-color: #C0392B; "
+            "color: white; "
+            "font-weight: bold; "
+            "font-size: 13px; "
+            "padding: 9px; "
+            "border-radius: 4px;"
+        )
+        self.btn_mcherry_page.clicked.connect(
+            self.switch_to_page3
+        )
+        layout.addWidget(self.btn_mcherry_page)
+
+        return panel
+
+    def build_page3_mcherry_ui(self) -> QWidget:
+        panel = QWidget()
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(8)
+
+        layout.addWidget(QLabel("<b>🔴 Step 4: mCherry Puncta Analysis</b>"))
+
+        grid = QGridLayout()
+
+        grid.addWidget(QLabel("mCherry Crops Dir:"), 0, 0)
+        self.mcherry_crop_dir = QLineEdit()
+        self.btn_browse_mcherry_crop = QPushButton("Browse")
+        self.btn_browse_mcherry_crop.clicked.connect(
+            lambda: self.browse_folder(self.mcherry_crop_dir)
+        )
+        h = QHBoxLayout()
+        h.addWidget(self.mcherry_crop_dir)
+        h.addWidget(self.btn_browse_mcherry_crop)
+        grid.addLayout(h, 0, 1)
+
+        grid.addWidget(QLabel("Cell Masks Dir:"), 1, 0)
+        self.mcherry_mask_dir = QLineEdit()
+        self.btn_browse_mcherry_mask = QPushButton("Browse")
+        self.btn_browse_mcherry_mask.clicked.connect(
+            lambda: self.browse_folder(self.mcherry_mask_dir)
+        )
+        h = QHBoxLayout()
+        h.addWidget(self.mcherry_mask_dir)
+        h.addWidget(self.btn_browse_mcherry_mask)
+        grid.addLayout(h, 1, 1)
+
+        grid.addWidget(QLabel("Output Dir:"), 2, 0)
+        self.mcherry_output_dir = QLineEdit()
+        self.btn_browse_mcherry_output = QPushButton("Browse")
+        self.btn_browse_mcherry_output.clicked.connect(
+            lambda: self.browse_folder(self.mcherry_output_dir)
+        )
+        h = QHBoxLayout()
+        h.addWidget(self.mcherry_output_dir)
+        h.addWidget(self.btn_browse_mcherry_output)
+        grid.addLayout(h, 2, 1)
+
+        layout.addLayout(grid)
+
+        params = QGridLayout()
+
+        params.addWidget(QLabel("Min Diameter:"), 0, 0)
+        self.mcherry_min_diameter = QLineEdit("2.6")
+        params.addWidget(self.mcherry_min_diameter, 0, 1)
+
+        params.addWidget(QLabel("Max Diameter:"), 0, 2)
+        self.mcherry_max_diameter = QLineEdit("8")
+        params.addWidget(self.mcherry_max_diameter, 0, 3)
+
+        params.addWidget(QLabel("Threshold:"), 1, 0)
+        self.mcherry_threshold = QLineEdit("0.09")
+        params.addWidget(self.mcherry_threshold, 1, 1)
+
+        self.btn_mcherry_start = QPushButton("🟢 Start")
+        self.btn_mcherry_start.clicked.connect(
+            self.initialize_mcherry_analysis
+        )
+        params.addWidget(self.btn_mcherry_start, 1, 2)
+
+        self.btn_mcherry_replot = QPushButton("🔄 Replot")
+        self.btn_mcherry_replot.clicked.connect(
+            self.replot_current_mcherry
+        )
+        params.addWidget(self.btn_mcherry_replot, 1, 3)
+
+        layout.addLayout(params)
+
+        self.mcherry_current_label = QLabel("No crop loaded")
+        self.mcherry_count_label = QLabel("Puncta: --")
+
+        info = QHBoxLayout()
+        info.addWidget(self.mcherry_current_label)
+        info.addStretch()
+        info.addWidget(self.mcherry_count_label)
+        layout.addLayout(info)
+
+        self.mcherry_figure = Figure(figsize=(7, 6))
+        self.mcherry_canvas = FigureCanvas(self.mcherry_figure)
+        layout.addWidget(self.mcherry_canvas, 1)
+
+        nav = QHBoxLayout()
+
+        self.btn_mcherry_previous = QPushButton("⬅ Previous")
+        self.btn_mcherry_previous.clicked.connect(
+            self.previous_mcherry_crop
+        )
+
+        self.btn_mcherry_next = QPushButton("Next ➡")
+        self.btn_mcherry_next.clicked.connect(
+            self.next_mcherry_crop
+        )
+
+        self.btn_mcherry_save = QPushButton("💾 Save Visualization")
+        self.btn_mcherry_save.clicked.connect(
+            self.save_current_mcherry_visualization
+        )
+
+        nav.addWidget(self.btn_mcherry_previous)
+        nav.addWidget(self.btn_mcherry_next)
+        nav.addWidget(self.btn_mcherry_save)
+
+        layout.addLayout(nav)
+
+        self.mcherry_progress_bar = QProgressBar()
+        layout.addWidget(self.mcherry_progress_bar)
+
+        self.btn_mcherry_batch = QPushButton(
+            "🔬 Run Batch mCherry Analysis"
+        )
+        self.btn_mcherry_batch.clicked.connect(
+            self.run_batch_mcherry_analysis
+        )
+        layout.addWidget(self.btn_mcherry_batch)
+
+        self.btn_back_mcherry = QPushButton(
+            "⬅️ Back: AI Cell Segmentation"
+        )
+        self.btn_back_mcherry.clicked.connect(
+            self.switch_to_page2
+        )
+        layout.addWidget(self.btn_back_mcherry)
+
+        self.mcherry_files = []
+        self.mcherry_current_index = -1
+        self.mcherry_current_result = None
+
         return panel
 
     def switch_to_page2(self):
@@ -480,6 +645,16 @@ class MicroscopyApp(QMainWindow):
     def switch_to_page1(self):
         self.left_stack.setCurrentIndex(0)
         self.log("[NAV]: Switched back to Nanowell Cropping Workspace.")
+
+    def switch_to_page3(self):
+        self.left_stack.setCurrentIndex(2)
+
+        crop_dir = self.mcherry_crop_dir.text().strip()
+
+        if crop_dir and os.path.isdir(crop_dir):
+            self.initialize_mcherry_analysis()
+
+        self.log("[NAV]: Switched to mCherry Analysis Workspace.")
 
     def log(self, text: str):
         """Logs message and immediately forces Qt event loop to update GUI widgets."""
@@ -805,7 +980,204 @@ class MicroscopyApp(QMainWindow):
         self.btn_run_ai.setText("🧠 Run AI Segmentation & Update Excel")
         self.log("🏁 [AI PIPELINE]: Task complete.")
 
+    def load_current_mcherry_crop(self):
+        if not self.mcherry_files:
+            print('No mCherry files.')
+            return
 
+        crop_path = self.mcherry_files[
+            self.mcherry_current_index
+        ]
+
+        try:
+            analysis = analyze_mcherry_image(
+                crop_path,
+                self.mcherry_mask_dir.text().strip(),
+                min_diameter=float(
+                    self.mcherry_min_diameter.text()
+                ),
+                max_diameter=float(
+                    self.mcherry_max_diameter.text()
+                ),
+                threshold=float(
+                    self.mcherry_threshold.text()
+                )
+            )
+
+            self.mcherry_current_result = analysis
+
+            self.display_mcherry_analysis(analysis)
+
+        except Exception as e:
+            self.log(
+                f"[mCherry ERROR]: {crop_path.name}: {e}"
+            )
+
+    def initialize_mcherry_analysis(self):
+        crop_dir = Path(
+            self.mcherry_crop_dir.text().strip()
+        )
+
+        if not crop_dir.is_dir():
+            self.log("[mCherry ERROR]: Invalid crop directory.")
+            return
+
+        self.mcherry_files = sorted(
+            crop_dir.glob("*.png")
+        )
+
+        if not self.mcherry_files:
+            self.log("[mCherry ERROR]: No PNG crops found.")
+            return
+
+        self.mcherry_current_index = 0
+        self.load_current_mcherry_crop()
+
+
+    def display_mcherry_analysis(self, analysis):
+        crop_path = self.mcherry_files[
+            self.mcherry_current_index
+        ]
+
+        self.mcherry_current_label.setText(
+            f"{crop_path.name} "
+            f"({self.mcherry_current_index + 1}/"
+            f"{len(self.mcherry_files)})"
+        )
+
+        self.mcherry_count_label.setText(
+            f"Puncta: {analysis['count']}"
+        )
+
+        self.mcherry_figure.clear()
+
+        ax = self.mcherry_figure.add_subplot(111)
+
+        plot_mcherry_analysis(
+            ax,
+            analysis["image"],
+            analysis["mask"],
+            analysis["puncta"],
+            title=(
+                f"{crop_path.name} | "
+                f"Puncta: {analysis['count']} | "
+                f"Mean intensity: "
+                f"{analysis['mean_intensity']:.2f} | "
+                f"Mean size: "
+                f"{analysis['mean_size']:.2f} px"
+            )
+        )
+
+        self.mcherry_figure.tight_layout()
+        self.mcherry_canvas.draw()
+
+    def replot_current_mcherry(self):
+        self.load_current_mcherry_crop()
+
+    def next_mcherry_crop(self):
+        if not self.mcherry_files:
+            return
+
+        self.save_current_mcherry_visualization()
+
+        if self.mcherry_current_index < len(
+            self.mcherry_files
+        ) - 1:
+            self.mcherry_current_index += 1
+            self.load_current_mcherry_crop()
+
+    def previous_mcherry_crop(self):
+        if not self.mcherry_files:
+            return
+
+        if self.mcherry_current_index > 0:
+            self.mcherry_current_index -= 1
+            self.load_current_mcherry_crop()
+
+    def save_current_mcherry_visualization(self):
+        if not self.mcherry_current_result:
+            return
+
+        output_dir = self.mcherry_output_dir.text().strip()
+
+        if not output_dir:
+            crop_dir = Path(
+                self.mcherry_crop_dir.text().strip()
+            )
+            output_dir = str(
+                crop_dir.parent / "mCherry Analysis"
+            )
+            self.mcherry_output_dir.setText(output_dir)
+
+        crop_path = self.mcherry_files[
+            self.mcherry_current_index
+        ]
+
+        output_path = (
+            Path(output_dir) /
+            "Visualizations" /
+            f"{crop_path.stem}_mCherry_puncta.png"
+        )
+
+        fig = Figure(figsize=(7, 6))
+        ax = fig.add_subplot(111)
+
+        plot_mcherry_analysis(
+            ax,
+            self.mcherry_current_result["image"],
+            self.mcherry_current_result["mask"],
+            self.mcherry_current_result["puncta"],
+            title=crop_path.name
+        )
+
+        save_mcherry_figure(
+            fig,
+            output_path
+        )
+
+        self.log(
+            f"[mCherry]: Saved {output_path.name}"
+        )
+
+    def run_batch_mcherry_analysis(self):
+        crop_dir = self.mcherry_crop_dir.text().strip()
+        mask_dir = self.mcherry_mask_dir.text().strip()
+        output_dir = self.mcherry_output_dir.text().strip()
+
+        if not output_dir:
+            output_dir = str(
+                Path(crop_dir).parent /
+                "mCherry Analysis"
+            )
+            self.mcherry_output_dir.setText(output_dir)
+
+        try:
+            results = batch_analyze_mcherry(
+                crop_dir=crop_dir,
+                mask_dir=mask_dir,
+                output_dir=output_dir,
+                min_diameter=float(
+                    self.mcherry_min_diameter.text()
+                ),
+                max_diameter=float(
+                    self.mcherry_max_diameter.text()
+                ),
+                threshold=float(
+                    self.mcherry_threshold.text()
+                ),
+                progress_callback=self.mcherry_progress_bar.setValue,
+                log_callback=self.log
+            )
+
+            self.log(
+                f"[mCherry]: Batch complete. "
+                f"{len(results)} images processed."
+            )
+
+        except Exception as e:
+            self.log(
+                f"[mCherry ERROR]: {e}"
+            )
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
