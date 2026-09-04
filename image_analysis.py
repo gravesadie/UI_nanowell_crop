@@ -89,7 +89,7 @@ def execute_ai_segmentation(processed_wells_dir: str, well_name: str, time: str,
         log_callback(f"📁 [MASKS]: Exporting validation masks to:\n{mask_export_dir}")
 
     # 2. Locate and load the cpsam model
-    model_version = "cpsam" # "cpsam_20260730_Huh7_8fov" # "cpsam_v2"
+    model_version = "cpsam_20260730_Huh7_8fov" # "cpsam_v2"
     model_path = os.path.join(model_dir, model_version) 
     if not os.path.exists(model_path):
         log_callback(f"❌ [ERROR]: Pre-trained model f{model_version} not found under: {model_dir}")
@@ -201,6 +201,10 @@ def execute_ai_segmentation(processed_wells_dir: str, well_name: str, time: str,
 
             # Mode 1: Skip non-single-cell wells
             if mode == 1 and cell_count != 1:
+                continue
+
+            # QC on cellpose mask size
+            if total_cell_area < 12000 or total_cell_area > 55000:
                 continue
 
             results.append({
