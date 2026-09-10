@@ -11,7 +11,8 @@ CHANNEL_MAP = {
     '20X Phase': 'BF',
     'mCherry': 'mCherry',
     'GFP': 'GFP',
-    'RGB': 'RGB'
+    'RGB': 'RGB',
+    'Cy5': 'Cy5'
 }
 
 def load_bf_image(img_dir: str, well_name: str, time: str):
@@ -61,7 +62,7 @@ def rename_raw_files(directory: str, time: str, log_callback=print):
                 continue
 
             match_check_good = re.match(r"[A-Z]\d{2}_Time\d+_(.*)\.tif$", filename)
-            if match_check_good and match_check_good.group(1) in {"RGB", "BF", "GFP", "mCherry"}:
+            if match_check_good and match_check_good.group(1) in {"RGB", "BF", "GFP", "mCherry", "Cy5"}:
                 match_count += 1
                 continue
 
@@ -82,7 +83,7 @@ def rename_raw_files(directory: str, time: str, log_callback=print):
         log_callback(f"❌ [ERROR]: Rename engine failed: {e}")
 
 
-def detect_center_square(cached_gray: np.ndarray, sq_len: int, roi_size: int = 6000):
+def detect_center_square(cached_gray: np.ndarray, sq_len: int, roi_size: int = 10000):
     """
     Identifies the central square origin within a localized ROI.
     Returns (rect_center, cached_binary_crop, error_msg).
@@ -296,7 +297,7 @@ def execute_rollback(load_path: str, well_name: str, time: str, log_callback=pri
 
     for channel_item in os.listdir(save_base_path):
         channel_dir = os.path.join(save_base_path, channel_item)
-        if not os.path.isdir(channel_dir) or channel_item not in ("BF", "RGB", "mCherry", "GFP"):
+        if not os.path.isdir(channel_dir) or channel_item not in ("BF", "RGB", "mCherry", "GFP", "Cy5"):
             continue
 
         for img_name in os.listdir(channel_dir):

@@ -80,10 +80,10 @@ def load_mcherry_crop_and_mask(crop_path, mask_dir):
     mask_path = mask_dir / f"{mask_stem}_BF_mask.png"
 
     if not mask_path.exists():
-        raise FileNotFoundError(
-            f"No corresponding mask found for "
-            f"{crop_path.name}: {mask_path}"
-        )
+        #raise FileNotFoundError(
+        print(f"No corresponding mask found for "
+            f"{crop_path.name}: {mask_path}")
+        return None
 
     image = io.imread(str(crop_path))
     mask = io.imread(str(mask_path))
@@ -245,11 +245,29 @@ def detect_mcherry_puncta(
 
     return valid_blobs
 
+def clear_mcherry_analysis(
+    ax,
+    image,
+    title=None):
+
+    ax.clear()
+
+    ax.imshow(
+        image,
+        cmap="gray"
+    )
+
+    if title:
+        ax.set_title(title)
+
+    ax.axis("off")
+
 def plot_mcherry_analysis(
     ax,
     image,
     mask,
     puncta,
+    clear,
     title=None
 ):
     ax.clear()
@@ -275,7 +293,7 @@ def plot_mcherry_analysis(
             punctum["radius"],
             fill=False,
             edgecolor="red",
-            linewidth=1.5
+            linewidth=0.6
         )
         ax.add_patch(circle)
 
@@ -486,6 +504,9 @@ def analyze_mcherry_image(
         )
     )
 
+    if image == None:
+        return None
+    
     puncta = detect_mcherry_puncta(
         image=image,
         mask=mask,
@@ -601,6 +622,8 @@ def batch_analyze_mcherry(
         crop_dir.glob("*.png")
     )
 
+    crop_files = [x for x in crop_files if 'mCherry' in x]
+
     if not crop_files:
         raise FileNotFoundError(
             f"No PNG files found in {crop_dir}"
@@ -621,6 +644,9 @@ def batch_analyze_mcherry(
                 max_diameter=max_diameter,
                 threshold=threshold
             )
+
+            if analysis == None:
+                continue
 
             puncta = analysis["puncta"]
 

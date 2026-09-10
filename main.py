@@ -27,7 +27,8 @@ from mcherry_analysis import (
     analyze_mcherry_image,
     plot_mcherry_analysis,
     batch_analyze_mcherry,
-    save_mcherry_figure
+    save_mcherry_figure,
+    clear_mcherry_analysis
 )
 
 
@@ -76,12 +77,13 @@ class AIWorkerThread(QThread):
     finished_signal = pyqtSignal()
     error_signal = pyqtSignal(str)
 
-    def __init__(self, proc_dir, well_name, time, mode, model_dir, save_masks, cell_diameter):
+    def __init__(self, proc_dir, well_name, time, mode, ch, model_dir, save_masks, cell_diameter):
         super().__init__()
         self.proc_dir = proc_dir
         self.well_name = well_name
         self.time = time
         self.mode = mode
+        self.ch = ch
         self.model_dir = model_dir
         self.save_masks = save_masks
         self.cell_diameter = cell_diameter
@@ -93,6 +95,7 @@ class AIWorkerThread(QThread):
                 well_name=self.well_name,
                 time=self.time,
                 mode=self.mode,
+                ch=self.ch,
                 model_dir=self.model_dir,
                 save_masks=self.save_masks,
                 cell_diameter = self.cell_diameter,
@@ -378,16 +381,41 @@ class MicroscopyApp(QMainWindow):
 
         self.rb_mode1 = QRadioButton("Mode 1: Find & process single-cell nanowells only (Count == 1)")
         self.rb_mode2 = QRadioButton("Mode 2: Process designated coordinates from Excel file")
-        self.rb_mode3 = QRadioButton("Mode 3: Process all cropped nanowells")
-        self.rb_mode3.setChecked(True)   
+        self.rb_mode3 = QRadioButton("Mode 3: Process non-empty nanowells")
+        self.rb_mode4 = QRadioButton("Mode 4: Process all cropped nanowells")
+        self.rb_mode4.setChecked(True)   
 
         self.mode_group.addButton(self.rb_mode1, 1)
         self.mode_group.addButton(self.rb_mode2, 2)
         self.mode_group.addButton(self.rb_mode3, 3)
+        self.mode_group.addButton(self.rb_mode4, 4)
 
         layout.addWidget(self.rb_mode1)
         layout.addWidget(self.rb_mode2)
         layout.addWidget(self.rb_mode3)
+        layout.addWidget(self.rb_mode4)
+
+        layout.addSpacing(6)
+
+        # Channel Selection for Segmentation
+        layout.addWidget(QLabel("<b>Channel Selection for Segmentation:</b>"))
+        self.ch_selec = QButtonGroup(self)
+
+        self.ch1 = QRadioButton("RGB")
+        self.ch2 = QRadioButton("BF")
+        self.ch3 = QRadioButton("mCherry")
+        self.ch4 = QRadioButton("GFP")
+        self.ch1.setChecked(True)   
+
+        self.ch_selec.addButton(self.ch1, 1)
+        self.ch_selec.addButton(self.ch2, 2)
+        self.ch_selec.addButton(self.ch3, 3)
+        self.ch_selec.addButton(self.ch4, 4)
+
+        layout.addWidget(self.ch1)
+        layout.addWidget(self.ch2)
+        layout.addWidget(self.ch3)
+        layout.addWidget(self.ch4)
 
         layout.addSpacing(6)
 
@@ -549,6 +577,12 @@ class MicroscopyApp(QMainWindow):
 
         self.btn_mcherry_replot = QPushButton("🔄 Replot")
         self.btn_mcherry_replot.clicked.connect(
+            self.replot_current_mcherry
+        )
+        params.addWidget(self.btn_mcherry_replot, 1, 3)
+
+        self.btn_mcherry_clear = QPushButton("❌ Clear overlay")
+        self.btn_mcherry_clear.clicked.connect(
             self.replot_current_mcherry
         )
         params.addWidget(self.btn_mcherry_replot, 1, 3)
@@ -934,6 +968,7 @@ class MicroscopyApp(QMainWindow):
         well_name = self.ai_well_name.text().strip()
         time = self.ai_time.text().strip()
         mode = self.mode_group.checkedId()
+        ch = self.ch_selec.checkedId()
 
         if not proc_dir or not well_name or not time:
             self.log("❌ [WARNING]: Processed Wells Dir, Well Name, and Time Index must all be filled!")
@@ -957,13 +992,13 @@ class MicroscopyApp(QMainWindow):
         self.btn_run_ai.setText("⏳ AI Analysis in Progress...")
         self.ai_progress_bar.setValue(0)
 
-
         # Launch background AI worker thread
         self.ai_thread = AIWorkerThread(
             proc_dir=proc_dir,
             well_name=well_name,
             time=time,
             mode=mode,
+            ch=ch,
             model_dir=self.models_dir,
             save_masks=self.cb_save_masks.isChecked(),
             cell_diameter=cell_diameter
@@ -980,7 +1015,7 @@ class MicroscopyApp(QMainWindow):
         self.btn_run_ai.setText("🧠 Run AI Segmentation & Update Excel")
         self.log("🏁 [AI PIPELINE]: Task complete.")
 
-    def load_current_mcherry_crop(self):
+    def load_current_mcherry_crop(self, clear=False):
         if not self.mcherry_files:
             print('No mCherry files.')
             return
@@ -1006,7 +1041,10 @@ class MicroscopyApp(QMainWindow):
 
             self.mcherry_current_result = analysis
 
-            self.display_mcherry_analysis(analysis)
+            if clear:
+                self.clear_mcherry_overlay(analysis)
+            else:
+                self.display_mcherry_analysis(analysis)
 
         except Exception as e:
             self.log(
@@ -1068,11 +1106,35 @@ class MicroscopyApp(QMainWindow):
             )
         )
 
-        self.mcherry_figure.tight_layout()
-        self.mcherry_canvas.draw()
+    def clear_mcherry_overlay(self, analysis):
+        crop_path = self.mcherry_files[
+            self.mcherry_current_index
+        ]
+
+        self.mcherry_figure.clear()
+
+        ax = self.mcherry_figure.add_subplot(111)
+
+        clear_mcherry_analysis(
+            ax,
+            analysis["image"],
+            analysis["mask"],
+            analysis["puncta"],
+            title=(
+                f"{crop_path.name} | "
+                f"Puncta: {analysis['count']} | "
+                f"Mean intensity: "
+                f"{analysis['mean_intensity']:.2f} | "
+                f"Mean size: "
+                f"{analysis['mean_size']:.2f} px"
+            )
+        )
 
     def replot_current_mcherry(self):
         self.load_current_mcherry_crop()
+
+    def clear_current_mcherry(self):
+        self.load_current_mcherry_crop(clear=True)
 
     def next_mcherry_crop(self):
         if not self.mcherry_files:

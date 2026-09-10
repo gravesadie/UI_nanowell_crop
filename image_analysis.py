@@ -30,6 +30,13 @@ try:
 except ImportError:
     CELLPOSE_AVAILABLE = False
 
+# Channel mappings for segmentation
+CH_SEG_MAP = {
+    1: 'RGB',
+    2: 'BF',
+    3: 'mCherry',
+    4: 'GFP'
+}
 
 def colorize_mask(mask: np.ndarray) -> np.ndarray:
     """
@@ -56,7 +63,7 @@ def colorize_mask(mask: np.ndarray) -> np.ndarray:
 
 
 def execute_ai_segmentation(processed_wells_dir: str, well_name: str, time: str,
-                            mode: int, model_dir: str, save_masks: bool = False, 
+                            mode: int, ch: int, model_dir: str, save_masks: bool = False, 
                             cell_diameter: float = 30.0, log_callback=print, 
                             progress_callback=None, batch_size: int = 16):
     """
@@ -76,10 +83,19 @@ def execute_ai_segmentation(processed_wells_dir: str, well_name: str, time: str,
     well_name = well_name.strip()
     time = time.strip()
 
-    bf_folder = os.path.join(processed_wells_dir, well_name, "BF")
+    # 0. get channel for segmentation
+    channel = CH_SEG_MAP[ch]
+    bf_folder = os.path.join(processed_wells_dir, well_name, channel)
     if not os.path.exists(bf_folder):
-        log_callback(f"❌ [ERROR]: Bright-field (BF) directory not found at: {bf_folder}")
-        return
+        log_callback(f"❌ [ERROR]: {channel} image not found at: {bf_folder}.")
+        if channel != 'mCherry':
+            mch_folder = os.path.join(processed_wells_dir, well_name, 'mCherry')
+            if not os.path.exists(mch_folder):
+                log_callback(f"❌ [ERROR]: mCherry folder not found. Cannot proceed with segmentation.")
+                return
+            else:
+                log_callback(f"Using mCherry channel in place of selected channel.")
+                channel = 'mCherry'
 
     # 1. Setup Mask Export Directory if requested
     mask_export_dir = ""
@@ -89,7 +105,7 @@ def execute_ai_segmentation(processed_wells_dir: str, well_name: str, time: str,
         log_callback(f"📁 [MASKS]: Exporting validation masks to:\n{mask_export_dir}")
 
     # 2. Locate and load the cpsam model
-    model_version = "cpsam" # "cpsam_20260730_Huh7_8fov" # 
+    model_version = "cpsam_20260730_Huh7_8fov" # "cpsam" #
     model_path = os.path.join(model_dir, model_version) 
     if not os.path.exists(model_path):
         log_callback(f"❌ [ERROR]: Pre-trained model f{model_version} not found under: {model_dir}")
@@ -104,7 +120,7 @@ def execute_ai_segmentation(processed_wells_dir: str, well_name: str, time: str,
         log_callback("⚠️ [AI MODEL]: CUDA GPU unavailable. Model running in CPU mode.")
 
     # 3. Gather image candidates matching pattern: <well_name>_<coordinate>_Time<time>_BF.png
-    pattern = rf"^{well_name}_(R[-]?\d+_C[-]?\d+)_Time{time}_BF\.png$"
+    pattern = rf"^{well_name}_(R[-]?\d+_C[-]?\d+)_Time{time}_{channel}\.png$"
     available_files = {}
     for fname in os.listdir(bf_folder):
         m = re.match(pattern, fname)
@@ -113,7 +129,7 @@ def execute_ai_segmentation(processed_wells_dir: str, well_name: str, time: str,
             available_files[coord] = os.path.join(bf_folder, fname)
 
     if not available_files:
-        log_callback(f"⚠️ [WARNING]: No Bright-field images found for Well '{well_name}' Time '{time}'.")
+        log_callback(f"⚠️ [WARNING]: No {channel} images found for Well '{well_name}' Time '{time}'.")
         return
 
     # 4. Filter target coordinates based on chosen mode
@@ -201,6 +217,10 @@ def execute_ai_segmentation(processed_wells_dir: str, well_name: str, time: str,
 
             # Mode 1: Skip non-single-cell wells
             if mode == 1 and cell_count != 1:
+                continue
+
+            # Mode 3: Skip empty wells
+            if mode == 3 and cell_count == 0:
                 continue
 
             # QC on cellpose mask size
