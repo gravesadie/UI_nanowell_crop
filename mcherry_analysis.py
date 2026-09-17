@@ -563,8 +563,6 @@ def batch_analyze_mcherry(
     log_callback=None
 ):
     """
-    Batch process all mCherry PNGs.
-
     Parameters
     ----------
     crop_dir : str or Path
@@ -611,11 +609,9 @@ def batch_analyze_mcherry(
     )
 
     crop_files = sorted(
-        crop_dir.glob("*.png"))
+        crop_dir.glob("*_mCherry.png"))
     mask_files = sorted(
         mask_dir.glob("*_mask.png"))
-
-    crop_files = [x for x in crop_files if 'mCherry' in x]
 
     if not crop_files:
         raise FileNotFoundError(

@@ -1022,9 +1022,6 @@ class MicroscopyApp(QMainWindow):
             print('No mCherry files.')
             return
 
-        crop_path = self.mcherry_files[
-            self.mcherry_current_index
-        ]
         mask_path = self.mask_files[
             self.mcherry_current_index
         ]
@@ -1053,7 +1050,7 @@ class MicroscopyApp(QMainWindow):
 
         except Exception as e:
             self.log(
-                f"[mCherry ERROR]: {crop_path.name}: {e}"
+                f"[mCherry ERROR]: {mask_path.name}: {e}"
             )
 
     def initialize_mcherry_analysis(self):
@@ -1078,7 +1075,7 @@ class MicroscopyApp(QMainWindow):
 
 
     def display_mcherry_analysis(self, analysis):
-        crop_path = self.mcherry_files[
+        crop_path = self.mask_files[
             self.mcherry_current_index
         ]
 
@@ -1125,14 +1122,7 @@ class MicroscopyApp(QMainWindow):
             analysis["image"],
             analysis["mask"],
             analysis["puncta"],
-            title=(
-                f"{crop_path.name} | "
-                f"Puncta: {analysis['count']} | "
-                f"Mean intensity: "
-                f"{analysis['mean_intensity']:.2f} | "
-                f"Mean size: "
-                f"{analysis['mean_size']:.2f} px"
-            )
+            title=f"{crop_path.name}"
         )
 
     def replot_current_mcherry(self):
