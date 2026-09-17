@@ -9,6 +9,9 @@ from skimage.feature import blob_log
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
 
+import glob
+import os
+
 
 def convert_to_grayscale(image):
     """
@@ -43,15 +46,10 @@ def convert_to_grayscale(image):
     )
 
 
-def load_mcherry_crop_and_mask(crop_path, mask_dir):
+def load_mcherry_crop_and_mask(mask_path, crop_dir):
     """
-    Load an mCherry crop and its corresponding cell mask.
-
-    The mask is matched using the filename stem.
-
-    Example:
-        crop: A01_cell01.png
-        mask: A01_cell01.png
+    Load an mCherry mask and its corresponding cell crop.
+    The mask/crop are matched using the filename stem.
 
     Parameters
     ----------
@@ -72,18 +70,16 @@ def load_mcherry_crop_and_mask(crop_path, mask_dir):
     mask_path : pathlib.Path
         Path to matched mask.
     """
+    mask_path = Path(mask_path)
+    crop_dir = Path(crop_dir)
 
-    crop_path = Path(crop_path)
-    mask_dir = Path(mask_dir)
+    crop_stem = ("_").join(mask_path.stem.split("_")[:-2])
+    crop_path = Path(crop_dir / f"{crop_stem}_mCherry.png")
 
-    mask_stem = crop_path.stem.removesuffix("_mCherry")
-    mask_path = mask_dir / f"{mask_stem}_BF_mask.png"
-
-    if not mask_path.exists():
-        #raise FileNotFoundError(
-        print(f"No corresponding mask found for "
-            f"{crop_path.name}: {mask_path}")
-        return None
+    if not crop_path.exists():
+        raise FileNotFoundError(
+        f"No corresponding crop found for "
+            f"{mask_path.name}: {crop_path}")
 
     image = io.imread(str(crop_path))
     mask = io.imread(str(mask_path))
@@ -257,7 +253,7 @@ def clear_mcherry_analysis(
         cmap="gray"
     )
 
-    if title:
+    if title is not None:
         ax.set_title(title)
 
     ax.axis("off")
@@ -267,7 +263,6 @@ def plot_mcherry_analysis(
     image,
     mask,
     puncta,
-    clear,
     title=None
 ):
     ax.clear()
@@ -297,7 +292,7 @@ def plot_mcherry_analysis(
         )
         ax.add_patch(circle)
 
-    if title:
+    if title is not None:
         ax.set_title(title)
 
     ax.axis("off")
@@ -485,8 +480,8 @@ def create_mcherry_figure(
 
 
 def analyze_mcherry_image(
-    crop_path,
-    mask_dir,
+    mask_path,
+    crop_dir,
     min_diameter=2.6,
     max_diameter=8.0,
     threshold=0.09
@@ -499,13 +494,10 @@ def analyze_mcherry_image(
 
     image, mask, mask_path = (
         load_mcherry_crop_and_mask(
-            crop_path,
-            mask_dir
+            mask_path,
+            crop_dir
         )
     )
-
-    if image == None:
-        return None
     
     puncta = detect_mcherry_puncta(
         image=image,
@@ -619,8 +611,9 @@ def batch_analyze_mcherry(
     )
 
     crop_files = sorted(
-        crop_dir.glob("*.png")
-    )
+        crop_dir.glob("*.png"))
+    mask_files = sorted(
+        mask_dir.glob("*_mask.png"))
 
     crop_files = [x for x in crop_files if 'mCherry' in x]
 
@@ -633,13 +626,12 @@ def batch_analyze_mcherry(
 
     total = len(crop_files)
 
-    for index, crop_path in enumerate(crop_files):
-
+    for index, mask_path in enumerate(mask_files):
+        mask_path_smpl = Path("_".join(mask_path.stem.split("_")[:-2]))
         try:
-
             analysis = analyze_mcherry_image(
-                crop_path=crop_path,
-                mask_dir=mask_dir,
+                mask_path=mask_path,
+                crop_dir=crop_dir,
                 min_diameter=min_diameter,
                 max_diameter=max_diameter,
                 threshold=threshold
@@ -651,7 +643,7 @@ def batch_analyze_mcherry(
             puncta = analysis["puncta"]
 
             title = (
-                f"{crop_path.name}\n"
+                f"{mask_path_smpl.name}\n"
                 f"Puncta: {analysis['count']} | "
                 f"Mean Intensity: "
                 f"{analysis['mean_intensity']:.2f} | "
@@ -668,7 +660,7 @@ def batch_analyze_mcherry(
 
             output_path = (
                 visualization_dir /
-                f"{crop_path.stem}_mCherry_puncta.png"
+                f"{mask_path_smpl.stem}_mCherry_puncta.png"
             )
 
             save_mcherry_figure(
@@ -677,7 +669,7 @@ def batch_analyze_mcherry(
             )
 
             results.append({
-                "image": crop_path.name,
+                "image": mask_path_smpl.name,
                 "number_of_mCherry_puncta":
                     analysis["count"],
                 "mean_intensity_of_puncta":
@@ -694,7 +686,7 @@ def batch_analyze_mcherry(
 
             if log_callback:
                 log_callback(
-                    f"[mCherry]: {crop_path.name} → "
+                    f"[mCherry]: {mask_path_smpl.name} → "
                     f"{analysis['count']} puncta | "
                     f"Mean intensity = "
                     f"{analysis['mean_intensity']:.2f} | "
@@ -707,11 +699,11 @@ def batch_analyze_mcherry(
             if log_callback:
                 log_callback(
                     f"[mCherry ERROR]: "
-                    f"{crop_path.name}: {e}"
+                    f"{mask_path.name}: {e}"
                 )
 
             results.append({
-                "image": crop_path.name,
+                "image": mask_path_smpl.name,
                 "number_of_mCherry_puncta": np.nan,
                 "mean_intensity_of_puncta": np.nan,
                 "mean_size_of_puncta": np.nan,

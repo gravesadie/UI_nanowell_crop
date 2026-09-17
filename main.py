@@ -554,7 +554,6 @@ class MicroscopyApp(QMainWindow):
         grid.addLayout(h, 2, 1)
 
         layout.addLayout(grid)
-
         params = QGridLayout()
 
         params.addWidget(QLabel("Min Diameter:"), 0, 0)
@@ -583,9 +582,9 @@ class MicroscopyApp(QMainWindow):
 
         self.btn_mcherry_clear = QPushButton("❌ Clear overlay")
         self.btn_mcherry_clear.clicked.connect(
-            self.replot_current_mcherry
+            self.clear_current_mcherry
         )
-        params.addWidget(self.btn_mcherry_replot, 1, 3)
+        params.addWidget(self.btn_mcherry_clear, 1, 4)
 
         layout.addLayout(params)
 
@@ -645,6 +644,7 @@ class MicroscopyApp(QMainWindow):
         layout.addWidget(self.btn_back_mcherry)
 
         self.mcherry_files = []
+        self.mask_files = []
         self.mcherry_current_index = -1
         self.mcherry_current_result = None
 
@@ -681,12 +681,14 @@ class MicroscopyApp(QMainWindow):
         self.log("[NAV]: Switched back to Nanowell Cropping Workspace.")
 
     def switch_to_page3(self):
+        """Pre-fills Page 3 inputs from Page 2, dynamically detects Excel presence, and switches page."""
+        processed_dir = self.ai_processed_dir.text().strip().replace('\\', '/')
+        if processed_dir:
+            self.mcherry_crop_dir.setText(processed_dir)
+            self.mcherry_mask_dir.setText(processed_dir)
+            self.mcherry_output_dir.setText(processed_dir)
+
         self.left_stack.setCurrentIndex(2)
-
-        crop_dir = self.mcherry_crop_dir.text().strip()
-
-        if crop_dir and os.path.isdir(crop_dir):
-            self.initialize_mcherry_analysis()
 
         self.log("[NAV]: Switched to mCherry Analysis Workspace.")
 
@@ -1023,11 +1025,14 @@ class MicroscopyApp(QMainWindow):
         crop_path = self.mcherry_files[
             self.mcherry_current_index
         ]
+        mask_path = self.mask_files[
+            self.mcherry_current_index
+        ]
 
         try:
             analysis = analyze_mcherry_image(
-                crop_path,
-                self.mcherry_mask_dir.text().strip(),
+                mask_path,
+                self.mcherry_crop_dir.text().strip(),
                 min_diameter=float(
                     self.mcherry_min_diameter.text()
                 ),
@@ -1052,17 +1057,17 @@ class MicroscopyApp(QMainWindow):
             )
 
     def initialize_mcherry_analysis(self):
-        crop_dir = Path(
-            self.mcherry_crop_dir.text().strip()
-        )
+        crop_dir = Path(self.mcherry_crop_dir.text().strip())
+        mask_dir = Path(self.mcherry_mask_dir.text().strip())
 
         if not crop_dir.is_dir():
             self.log("[mCherry ERROR]: Invalid crop directory.")
             return
 
         self.mcherry_files = sorted(
-            crop_dir.glob("*.png")
+            crop_dir.glob("*_mCherry.png")
         )
+        self.mask_files = sorted(mask_dir.glob("*_mask.png"))
 
         if not self.mcherry_files:
             self.log("[mCherry ERROR]: No PNG crops found.")
@@ -1107,7 +1112,7 @@ class MicroscopyApp(QMainWindow):
         )
 
     def clear_mcherry_overlay(self, analysis):
-        crop_path = self.mcherry_files[
+        crop_path = self.mask_files[
             self.mcherry_current_index
         ]
 
@@ -1131,6 +1136,7 @@ class MicroscopyApp(QMainWindow):
         )
 
     def replot_current_mcherry(self):
+        self.log("Plotting puncta detection.")
         self.load_current_mcherry_crop()
 
     def clear_current_mcherry(self):
@@ -1143,7 +1149,7 @@ class MicroscopyApp(QMainWindow):
         self.save_current_mcherry_visualization()
 
         if self.mcherry_current_index < len(
-            self.mcherry_files
+            self.mask_files
         ) - 1:
             self.mcherry_current_index += 1
             self.load_current_mcherry_crop()
@@ -1171,7 +1177,7 @@ class MicroscopyApp(QMainWindow):
             )
             self.mcherry_output_dir.setText(output_dir)
 
-        crop_path = self.mcherry_files[
+        crop_path = self.mask_files[
             self.mcherry_current_index
         ]
 
