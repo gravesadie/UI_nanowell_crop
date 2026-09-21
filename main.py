@@ -30,6 +30,7 @@ from mcherry_analysis import (
     save_mcherry_figure,
     clear_mcherry_analysis
 )
+from GFP_analysis import batch_analyze_GFP
 
 
 import torch
@@ -152,10 +153,12 @@ class MicroscopyApp(QMainWindow):
         page1_widget = self.build_page1_cropping_ui()
         page2_widget = self.build_page2_analysis_ui()
         page3_widget = self.build_page3_mcherry_ui()
+        page4_widget = self.build_page4_gfp_ui()
 
         self.left_stack.addWidget(page1_widget)  # Index 0: Cropping Page
         self.left_stack.addWidget(page2_widget)  # Index 1: AI segmentation Page
         self.left_stack.addWidget(page3_widget)  # Index 2: mCherry puncta analysis page
+        self.left_stack.addWidget(page4_widget)  # Index 3: GFP analysis page
 
         splitter.addWidget(self.left_stack)
 
@@ -643,12 +646,92 @@ class MicroscopyApp(QMainWindow):
         )
         layout.addWidget(self.btn_back_mcherry)
 
+        self.btn_to_GFP = QPushButton(
+            "🟢 Next: GFP Analysis"
+        )
+        self.btn_to_GFP.clicked.connect(
+            self.switch_to_page4
+        )
+        layout.addWidget(self.btn_to_GFP)
+
         self.mcherry_files = []
         self.mask_files = []
         self.mcherry_current_index = -1
         self.mcherry_current_result = None
 
         return panel
+
+    def build_page4_gfp_ui(self) -> QWidget:
+        panel = QWidget()
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(8)
+
+        layout.addWidget(QLabel("<b>🟢 Step 5: GFP Analysis</b>"))
+
+        grid = QGridLayout()
+
+        grid.addWidget(QLabel("GFP Crops Dir:"), 0, 0)
+        self.GFP_crop_dir = QLineEdit()
+        self.btn_browse_GFP_crop = QPushButton("Browse")
+        self.btn_browse_GFP_crop.clicked.connect(
+            lambda: self.browse_folder(self.GFP_crop_dir)
+        )
+        h = QHBoxLayout()
+        h.addWidget(self.GFP_crop_dir)
+        h.addWidget(self.btn_browse_GFP_crop)
+        grid.addLayout(h, 0, 1)
+
+        grid.addWidget(QLabel("Cell Masks Dir:"), 1, 0)
+        self.GFP_mask_dir = QLineEdit()
+        self.btn_browse_GFP_mask = QPushButton("Browse")
+        self.btn_browse_GFP_mask.clicked.connect(
+            lambda: self.browse_folder(self.GFP_mask_dir)
+        )
+        h = QHBoxLayout()
+        h.addWidget(self.GFP_mask_dir)
+        h.addWidget(self.btn_browse_GFP_mask)
+        grid.addLayout(h, 1, 1)
+
+        grid.addWidget(QLabel("Output Dir:"), 2, 0)
+        self.GFP_output_dir = QLineEdit()
+        self.btn_browse_GFP_output = QPushButton("Browse")
+        self.btn_browse_GFP_output.clicked.connect(
+            lambda: self.browse_folder(self.GFP_output_dir)
+        )
+        h = QHBoxLayout()
+        h.addWidget(self.GFP_output_dir)
+        h.addWidget(self.btn_browse_GFP_output)
+        grid.addLayout(h, 2, 1)
+
+        layout.addLayout(grid)
+
+        self.GFP_progress_bar = QProgressBar()
+        layout.addWidget(self.GFP_progress_bar)
+
+        self.btn_GFP_batch = QPushButton(
+            "🔬 Run Batch GFP Analysis"
+        )
+        self.btn_GFP_batch.clicked.connect(
+            self.run_batch_GFP_analysis
+        )
+        layout.addWidget(self.btn_GFP_batch)
+
+        self.btn_back_to_mcherry = QPushButton(
+            "⬅️ Back: mCherry Analysis"
+        )
+        self.btn_back_to_mcherry.clicked.connect(
+            self.switch_to_page3
+        )
+        layout.addWidget(self.btn_back_to_mcherry)
+
+        self.GFP_files = []
+        self.mask_files = []
+        self.GFP_current_index = -1
+        self.GFP_current_result = None
+
+        return panel
+
 
     def switch_to_page2(self):
         """Pre-fills Page 2 inputs from Page 1, dynamically detects Excel presence, and switches page."""
@@ -681,7 +764,7 @@ class MicroscopyApp(QMainWindow):
         self.log("[NAV]: Switched back to Nanowell Cropping Workspace.")
 
     def switch_to_page3(self):
-        """Pre-fills Page 3 inputs from Page 2, dynamically detects Excel presence, and switches page."""
+        """Pre-fills Page 3 inputs from Page 2 and switches page."""
         processed_dir = self.ai_processed_dir.text().strip().replace('\\', '/')
         if processed_dir:
             self.mcherry_crop_dir.setText(processed_dir)
@@ -691,6 +774,17 @@ class MicroscopyApp(QMainWindow):
         self.left_stack.setCurrentIndex(2)
 
         self.log("[NAV]: Switched to mCherry Analysis Workspace.")
+
+    def switch_to_page4(self):
+        """Pre-fills Page 4 inputs from Page 3 and switches page."""
+        if self.mcherry_crop_dir.text().strip().replace('\\', '/') != "":
+            self.GFP_crop_dir.setText(self.mcherry_crop_dir.text().strip().replace('\\', '/'))
+            self.GFP_mask_dir.setText(self.mcherry_mask_dir.text().strip().replace('\\', '/'))
+            self.GFP_output_dir.setText(self.mcherry_output_dir.text().strip().replace('\\', '/'))
+
+        self.left_stack.setCurrentIndex(3)
+
+        self.log("[NAV]: Switched to GFP Analysis Workspace.")
 
     def log(self, text: str):
         """Logs message and immediately forces Qt event loop to update GUI widgets."""
@@ -1236,6 +1330,39 @@ class MicroscopyApp(QMainWindow):
             self.log(
                 f"[mCherry ERROR]: {e}"
             )
+
+    def run_batch_GFP_analysis(self):
+        crop_dir = self.GFP_crop_dir.text().strip()
+        mask_dir = self.GFP_mask_dir.text().strip()
+        output_dir = self.GFP_output_dir.text().strip()
+
+        if not output_dir:
+            output_dir = str(
+                Path(crop_dir).parent /
+                "GFP Analysis"
+            )
+            self.GFP_output_dir.setText(output_dir)
+
+        try:
+            results = batch_analyze_GFP(
+                crop_dir=crop_dir,
+                mask_dir=mask_dir,
+                output_dir=output_dir,
+                progress_callback=self.GFP_progress_bar.setValue,
+                log_callback=self.log
+            )
+
+            self.log(
+                f"[GFP]: Batch complete. "
+                f"{len(results)} images processed."
+            )
+
+        except Exception as e:
+            self.log(
+                f"[GFP ERROR]: {e}"
+            )
+
+
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)

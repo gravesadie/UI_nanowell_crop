@@ -46,7 +46,7 @@ def convert_to_grayscale(image):
     )
 
 
-def load_mcherry_crop_and_mask(mask_path, crop_dir):
+def load_mcherry_crop_and_mask(mask_path, crop_dir, channel='mCherry'):
     """
     Load an mCherry mask and its corresponding cell crop.
     The mask/crop are matched using the filename stem.
@@ -74,7 +74,7 @@ def load_mcherry_crop_and_mask(mask_path, crop_dir):
     crop_dir = Path(crop_dir)
 
     crop_stem = ("_").join(mask_path.stem.split("_")[:-2])
-    crop_path = Path(crop_dir / f"{crop_stem}_mCherry.png")
+    crop_path = Path(crop_dir / f"{crop_stem}_{channel}.png")
 
     if not crop_path.exists():
         raise FileNotFoundError(
