@@ -2,6 +2,7 @@ import os
 import sys
 import glob
 from pathlib import Path
+import pandas as pd
 
 # Suppress low-level OpenCV C++ warnings and libtiff logs before importing cv2
 os.environ["OPENCV_LOG_LEVEL"] = "OFF"
@@ -21,7 +22,7 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 import matplotlib.pyplot as plt
 
 import core_crop
-import image_analysis
+import segmentation
 from mcherry_analysis import (
     load_mcherry_crop_and_mask,
     analyze_mcherry_image,
@@ -91,7 +92,7 @@ class AIWorkerThread(QThread):
 
     def run(self):
         try:
-            image_analysis.execute_ai_segmentation(
+            segmentation.execute_ai_segmentation(
                 processed_wells_dir=self.proc_dir,
                 well_name=self.well_name,
                 time=self.time,
@@ -717,6 +718,14 @@ class MicroscopyApp(QMainWindow):
         )
         layout.addWidget(self.btn_GFP_batch)
 
+        self.btn_merge = QPushButton(
+            "🔢 Merge mCherry and GFP Results"
+        )
+        self.btn_merge.clicked.connect(
+            self.on_merge_csvs
+        )
+        layout.addWidget(self.btn_merge)
+
         self.btn_back_to_mcherry = QPushButton(
             "⬅️ Back: mCherry Analysis"
         )
@@ -1290,6 +1299,44 @@ class MicroscopyApp(QMainWindow):
         self.log(
             f"[mCherry]: Saved {output_path.name}"
         )
+
+    def merge_csvs(self, output_dir: Path, log_callback):
+        mCherry_csv = output_dir / "mCherry_puncta_results.csv"
+        GFP_csv = output_dir / "GFP_results.csv"
+        merged_csv = output_dir / "Merged_mCherry_GFP_results.csv"
+
+        if not mCherry_csv.exists() or not GFP_csv.exists():
+            log_callback("[MERGE ERROR]: Required CSV files for merging are missing.")
+            return
+        try:
+            df_mCherry = pd.read_csv(mCherry_csv)
+            df_GFP = pd.read_csv(GFP_csv)
+
+            # Merge on 'ID' column
+            merged_df = pd.merge(df_mCherry, df_GFP, on='ID', how='outer', suffixes=('', '_drop'))
+            merged_df = merged_df.drop(columns=merged_df.filter(like="_drop").columns)
+
+            merged_df.to_csv(merged_csv, index=False)
+            log_callback(f"[MERGE SUCCESS]: Merged CSV saved as '{merged_csv.name}'")
+        except Exception as e:
+            log_callback(f"[MERGE ERROR]: Failed to merge CSVs: {e}")
+
+    def on_merge_csvs(self):
+        """Checks for the presence of both mCherry and GFP CSVs and merges them if found."""
+        if self.mcherry_output_dir.text().strip() and self.GFP_output_dir.text().strip():
+            output_dir = Path(self.GFP_output_dir.text().strip())
+            outputs = output_dir.glob("*.csv")
+            if "mCherry_puncta_results.csv" in [f.name for f in outputs]:
+                # merge csvs in output dir
+                self.log("[INFO]: Merging mCherry and GFP results into a single CSV...")
+                try:
+                    self.merge_csvs(
+                        output_dir=output_dir,
+                        log_callback=self.log
+                    )
+                except Exception as e:
+                    self.log(
+                        f"[MERGE ERROR]: {e}")
 
     def run_batch_mcherry_analysis(self):
         crop_dir = self.mcherry_crop_dir.text().strip()
