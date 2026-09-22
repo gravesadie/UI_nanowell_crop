@@ -8,10 +8,10 @@ from skimage.feature import blob_log
 
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
+from skimage.measure import regionprops, label
 
 import glob
 import os
-
 
 def convert_to_grayscale(image):
     """
@@ -89,7 +89,7 @@ def load_mcherry_crop_and_mask(mask_path, crop_dir, channel='mCherry'):
     if mask.ndim == 3:
         mask = convert_to_grayscale(mask)
 
-    mask = mask > 0
+    #mask = mask > 0
 
     if image.shape[:2] != mask.shape[:2]:
         raise ValueError(
@@ -288,7 +288,7 @@ def plot_mcherry_analysis(
             punctum["radius"],
             fill=False,
             edgecolor="red",
-            linewidth=0.6
+            linewidth=0.3
         )
         ax.add_patch(circle)
 
@@ -461,7 +461,7 @@ def create_mcherry_figure(
             punctum["radius"],
             fill=False,
             edgecolor="red",
-            linewidth=1.5
+            linewidth=0.3
         )
 
         ax.add_patch(circle)
@@ -482,14 +482,14 @@ def create_mcherry_figure(
 def analyze_mcherry_image(
     mask_path,
     crop_dir,
+    results,
     min_diameter=2.6,
     max_diameter=8.0,
     threshold=0.09
 ):
     """
     Complete analysis pipeline for one mCherry crop.
-
-    Returns the loaded image, mask, puncta, and statistics.
+    Returns the loaded image and mask.
     """
 
     image, mask, mask_path = (
@@ -498,32 +498,52 @@ def analyze_mcherry_image(
             crop_dir
         )
     )
-    
-    puncta = detect_mcherry_puncta(
-        image=image,
-        mask=mask,
-        min_diameter=min_diameter,
-        max_diameter=max_diameter,
-        threshold=threshold
-    )
 
-    (
-        mean_intensity,
-        mean_size
-    ) = calculate_puncta_statistics(
-        image,
-        puncta
-    )
+    regions = regionprops(label(mask), image)
+    # iterate through multiple cells in same well if present
+    if len(regions) == 0:
+        return False
+    all_puncta = []
+    for (i, region) in enumerate(regions):
+        mask_i = mask == (i+1)
 
-    return {
+        puncta = detect_mcherry_puncta(
+            image=image,
+            mask=mask_i,
+            min_diameter=min_diameter,
+            max_diameter=max_diameter,
+            threshold=threshold
+        )
+        all_puncta.extend(puncta)
+
+        (mean_intensity, mean_size) = calculate_puncta_statistics(image, puncta)
+        I_sum = np.sum(image * mask_i)
+
+        res = {
+            "image": mask_path.name,
+            "cell_i": i,
+            "ID": f"{mask_path.stem}_cell{i}",
+            "area": region.area,
+            "centroid_x": region.centroid[0],
+            "centroid_y": region.centroid[1],
+            "puncta_I_summed": I_sum,
+            "puncta_count": len(puncta),
+            "puncta_mean_I": mean_intensity,
+            "puncta_mean_size": mean_size,
+            "min_diameter":min_diameter,
+            "max_diameter":max_diameter,
+            "threshold":threshold
+        }
+        results.append(res)
+    analysis = {
         "image": image,
         "mask": mask,
         "mask_path": mask_path,
-        "puncta": puncta,
-        "count": len(puncta),
+        "puncta": all_puncta,
+        "count": len(all_puncta),
         "mean_intensity": mean_intensity,
-        "mean_size": mean_size
-    }
+        "mean_size": mean_size}
+    return analysis, image, mask, all_puncta
 
 
 def save_mcherry_figure(
@@ -625,33 +645,20 @@ def batch_analyze_mcherry(
     for index, mask_path in enumerate(mask_files):
         mask_path_smpl = Path("_".join(mask_path.stem.split("_")[:-2]))
         try:
-            analysis = analyze_mcherry_image(
+            analysis, image, mask, puncta = analyze_mcherry_image(
                 mask_path=mask_path,
                 crop_dir=crop_dir,
+                results=results,
                 min_diameter=min_diameter,
                 max_diameter=max_diameter,
                 threshold=threshold
             )
 
-            if analysis == None:
-                continue
-
-            puncta = analysis["puncta"]
-
-            title = (
-                f"{mask_path_smpl.name}\n"
-                f"Puncta: {analysis['count']} | "
-                f"Mean Intensity: "
-                f"{analysis['mean_intensity']:.2f} | "
-                f"Mean Diameter: "
-                f"{analysis['mean_size']:.2f} px"
-            )
-
             fig = create_mcherry_figure(
-                image=analysis["image"],
-                mask=analysis["mask"],
+                image=image,
+                mask=mask,
                 puncta=puncta,
-                title=title
+                title=f"{mask_path_smpl.name}\n"
             )
 
             output_path = (
@@ -664,31 +671,9 @@ def batch_analyze_mcherry(
                 output_path
             )
 
-            results.append({
-                "image": mask_path_smpl.name,
-                "number_of_mCherry_puncta":
-                    analysis["count"],
-                "mean_intensity_of_puncta":
-                    analysis["mean_intensity"],
-                "mean_size_of_puncta":
-                    analysis["mean_size"],
-                "min_diameter":
-                    min_diameter,
-                "max_diameter":
-                    max_diameter,
-                "threshold":
-                    threshold
-            })
-
             if log_callback:
                 log_callback(
-                    f"[mCherry]: {mask_path_smpl.name} → "
-                    f"{analysis['count']} puncta | "
-                    f"Mean intensity = "
-                    f"{analysis['mean_intensity']:.2f} | "
-                    f"Mean size = "
-                    f"{analysis['mean_size']:.2f} px"
-                )
+                    f"[mCherry]: {mask_path_smpl.name}")
 
         except Exception as e:
 
@@ -699,14 +684,15 @@ def batch_analyze_mcherry(
                 )
 
             results.append({
-                "image": mask_path_smpl.name,
-                "number_of_mCherry_puncta": np.nan,
-                "mean_intensity_of_puncta": np.nan,
-                "mean_size_of_puncta": np.nan,
-                "min_diameter": min_diameter,
-                "max_diameter": max_diameter,
-                "threshold": threshold
-            })
+            "image": mask_path.name,
+            "cell_i": "n/a",
+            "area": np.nan,
+            "centroid_x": np.nan,
+            "centroid_y": np.nan,
+            "I_sum": np.nan,
+            "count": np.nan,
+            "mean_intensity": np.nan,
+            "mean_size": np.nan})
 
         if progress_callback:
             progress = int(
@@ -728,7 +714,8 @@ def batch_analyze_mcherry(
 
     if log_callback:
         log_callback(
-            f"[mCherry]: CSV saved → {csv_path}"
-        )
+            f"[mCherry]: CSV saved → {csv_path} \n"
+            f"[mCherry]: Batch complete. "
+            f"{len(results)} cells and {total} images/wells processed.")
 
     return results_df
