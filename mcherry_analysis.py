@@ -82,7 +82,10 @@ def load_mcherry_crop_and_mask(mask_path, crop_dir, channel='mCherry'):
             f"{mask_path.name}: {crop_path}")
 
     image = io.imread(str(crop_path))
-    mask = io.imread(str(mask_path))
+    if mask_path is not None and mask_path.exists():
+        mask = io.imread(str(mask_path))
+    else:
+        mask = np.ones((image.shape[0], image.shape[1]), dtype=bool)
 
     image = convert_to_grayscale(image)
 
@@ -620,7 +623,7 @@ def batch_analyze_mcherry(
 
     results = []
 
-    total = len(crop_files)
+    total = len(mask_files)
 
     for index, mask_path in enumerate(mask_files):
         mask_path_smpl = Path("_".join(mask_path.stem.split("_")[:-2]))

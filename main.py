@@ -788,7 +788,9 @@ class MicroscopyApp(QMainWindow):
         """Pre-fills Page 4 inputs from Page 3 and switches page."""
         if self.mcherry_crop_dir.text().strip().replace('\\', '/') != "":
             self.GFP_crop_dir.setText(self.mcherry_crop_dir.text().strip().replace('\\', '/'))
+        if self.mcherry_mask_dir.text().strip().replace('\\', '/') != "":
             self.GFP_mask_dir.setText(self.mcherry_mask_dir.text().strip().replace('\\', '/'))
+        if self.mcherry_output_dir.text().strip().replace('\\', '/') != "":
             self.GFP_output_dir.setText(self.mcherry_output_dir.text().strip().replace('\\', '/'))
 
         self.left_stack.setCurrentIndex(3)
@@ -1125,9 +1127,13 @@ class MicroscopyApp(QMainWindow):
             print('No mCherry files.')
             return
 
-        mask_path = self.mask_files[
-            self.mcherry_current_index
-        ]
+        if self.mcherry_mask_dir.text().strip() != "":
+            mask_path = self.mask_files[
+                self.mcherry_current_index
+            ]
+        else:
+            print("No mask directory given, skipping mask overlay.")
+            mask_path = None
 
         try:
             analysis = analyze_mcherry_image(

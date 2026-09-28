@@ -1,3 +1,4 @@
+from matplotlib import image
 import numpy as np
 import pandas as pd
 
@@ -8,19 +9,15 @@ from skimage.measure import regionprops, label
 import matplotlib.pyplot as plt
 from mcherry_analysis import load_mcherry_crop_and_mask
 
-def measure_intensity(region, image, mask):
-    '''Quantify the intensity of internalized LNP structures to normalize EE/expression'''
-    # compute relevant intensity stats
-    area = region.area
-    sum_I = np.sum(image * mask)
-    I_by_area = sum_I / area
-    stats = (area, sum_I, I_by_area, region.centroid[0],region.centroid[1], region.intensity_max, region.intensity_mean, region.intensity_std)
-    return stats
+# NEEDS UPDATING TO MATCH MULTI-CELL FIXES
+
+# also generally:
+# normalize background signal in different wells
+# subtract nanowell artifacts using pre-seeded well images? capture in GFP channel?
 
 def analyze_GFP_image(
     mask_path,
-    crop_dir, 
-    results):
+    crop_dir):
 
     image, mask, mask_path = (
         load_mcherry_crop_and_mask(
@@ -28,26 +25,16 @@ def analyze_GFP_image(
             crop_dir,
             channel='GFP'))
 
-    regions = regionprops(label(mask), image)
-    # iterate through multiple cells in same well if present -> DO I NEED TO DO THIS FOR MCHERRY TOO??
-    if len(regions) == 0:
-        return False
-    for (i, region) in enumerate(regions):
-        int_stats = measure_intensity(region, image, mask)
-
-        res = {
-            "image": mask_path.name,
-            "area": int_stats[0],
-            "I_sum": int_stats[1],
-            "sum_I_by_area": int_stats[2],
-            "centroid_x": int_stats[3],
-            "centroid_y": int_stats[4],
-            "I_max": int_stats[5],
-            "I_mean": int_stats[6],
-            "I_sd": int_stats[7]
-        }
-        results.append(res)
-    return (image, mask)
+    analysis = {
+        "image": image,
+        "mask": mask,
+        "image_path": mask_path.name,
+        "I_sum": np.sum(image * mask),
+        "I_max": np.max(image * mask),
+        "I_mean": np.mean(image * mask),
+        "I_sd": np.std(image * mask)
+    }
+    return analysis
 
 def create_GFP_figure(
     image,
@@ -116,23 +103,22 @@ def batch_analyze_GFP(
 
     results = []
 
-    total = len(crop_files)
+    total = len(mask_files)
 
     for index, mask_path in enumerate(mask_files):
         mask_path_smpl = Path("_".join(mask_path.stem.split("_")[:-2]))
         try:
-            img_mask_zip = analyze_GFP_image(
+            analysis = analyze_GFP_image(
                 mask_path=mask_path,
-                crop_dir=crop_dir,
-                results=results
+                crop_dir=crop_dir
             )
 
-            if not(img_mask_zip):
+            if not(analysis):
                 continue
 
             fig = create_GFP_figure(
-                image=img_mask_zip[0],
-                mask=img_mask_zip[1],
+                image=analysis['image'],
+                mask=analysis['mask'],
                 title=f"{mask_path_smpl.name}\n"
             )
 
@@ -147,6 +133,13 @@ def batch_analyze_GFP(
                 facecolor="white"
             )
             plt.close(fig)
+
+            results.append({
+                "image": mask_path_smpl.name,
+                "I_sum":  analysis["I_sum"],
+                "I_max":  analysis["I_max"],
+                "I_mean": analysis["I_mean"],
+                "I_sd": analysis["I_sd"]})
 
             if log_callback:
                 log_callback(
