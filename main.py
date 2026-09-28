@@ -1127,17 +1127,11 @@ class MicroscopyApp(QMainWindow):
             print('No mCherry files.')
             return
 
-        if self.mcherry_mask_dir.text().strip() != "":
-            mask_path = self.mask_files[
-                self.mcherry_current_index
-            ]
-        else:
-            print("No mask directory given, skipping mask overlay.")
-            mask_path = None
+        crop_path = self.crop_files[self.mcherry_current_index]
 
         try:
             analysis = analyze_mcherry_image(
-                mask_path,
+                crop_path,
                 self.mcherry_crop_dir.text().strip(),
                 min_diameter=float(
                     self.mcherry_min_diameter.text()
@@ -1159,12 +1153,11 @@ class MicroscopyApp(QMainWindow):
 
         except Exception as e:
             self.log(
-                f"[mCherry ERROR]: {mask_path.name}: {e}"
+                f"[mCherry ERROR]: {crop_path.name}: {e}"
             )
 
     def initialize_mcherry_analysis(self):
         crop_dir = Path(self.mcherry_crop_dir.text().strip())
-        mask_dir = Path(self.mcherry_mask_dir.text().strip())
 
         if not crop_dir.is_dir():
             self.log("[mCherry ERROR]: Invalid crop directory.")
@@ -1173,7 +1166,6 @@ class MicroscopyApp(QMainWindow):
         self.mcherry_files = sorted(
             crop_dir.glob("*_mCherry.png")
         )
-        self.mask_files = sorted(mask_dir.glob("*_mask.png"))
 
         if not self.mcherry_files:
             self.log("[mCherry ERROR]: No PNG crops found.")
@@ -1184,7 +1176,7 @@ class MicroscopyApp(QMainWindow):
 
 
     def display_mcherry_analysis(self, analysis):
-        crop_path = self.mask_files[
+        crop_path = self.mcherry_files[
             self.mcherry_current_index
         ]
 
@@ -1205,7 +1197,6 @@ class MicroscopyApp(QMainWindow):
         plot_mcherry_analysis(
             ax,
             analysis["image"],
-            analysis["mask"],
             analysis["puncta"],
             title=(
                 f"{crop_path.name} | "
@@ -1218,7 +1209,7 @@ class MicroscopyApp(QMainWindow):
         )
 
     def clear_mcherry_overlay(self, analysis):
-        crop_path = self.mask_files[
+        crop_path = self.mcherry_files[
             self.mcherry_current_index
         ]
 
@@ -1229,7 +1220,6 @@ class MicroscopyApp(QMainWindow):
         clear_mcherry_analysis(
             ax,
             analysis["image"],
-            analysis["mask"],
             analysis["puncta"],
             title=f"{crop_path.name}"
         )
@@ -1248,7 +1238,7 @@ class MicroscopyApp(QMainWindow):
         self.save_current_mcherry_visualization()
 
         if self.mcherry_current_index < len(
-            self.mask_files
+            self.mcherry_files
         ) - 1:
             self.mcherry_current_index += 1
             self.load_current_mcherry_crop()
@@ -1276,7 +1266,7 @@ class MicroscopyApp(QMainWindow):
             )
             self.mcherry_output_dir.setText(output_dir)
 
-        crop_path = self.mask_files[
+        crop_path = self.mcherry_files[
             self.mcherry_current_index
         ]
 
@@ -1292,7 +1282,6 @@ class MicroscopyApp(QMainWindow):
         plot_mcherry_analysis(
             ax,
             self.mcherry_current_result["image"],
-            self.mcherry_current_result["mask"],
             self.mcherry_current_result["puncta"],
             title=crop_path.name
         )

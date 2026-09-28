@@ -46,18 +46,14 @@ def convert_to_grayscale(image):
     )
 
 
-def load_mcherry_crop_and_mask(mask_path, crop_dir, channel='mCherry'):
+def load_mcherry_crop_and_mask(crop_path, mask_dir, channel='mCherry'):
     """
-    Load an mCherry mask and its corresponding cell crop.
-    The mask/crop are matched using the filename stem.
+    Load an mCherry crop and its mask, if provided.
 
     Parameters
     ----------
     crop_path : str or pathlib.Path
         Path to mCherry crop.
-
-    mask_dir : str or pathlib.Path
-        Directory containing mask PNGs.
 
     Returns
     -------
@@ -66,25 +62,19 @@ def load_mcherry_crop_and_mask(mask_path, crop_dir, channel='mCherry'):
 
     mask : numpy.ndarray
         Boolean cell mask.
-
-    mask_path : pathlib.Path
-        Path to matched mask.
     """
-    mask_path = Path(mask_path)
-    crop_dir = Path(crop_dir)
+    crop_path = Path(crop_path)
+    mask_dir = Path(mask_dir)
 
-    crop_stem = ("_").join(mask_path.stem.split("_")[:-2])
-    crop_path = Path(crop_dir / f"{crop_stem}_{channel}.png")
-
-    if not crop_path.exists():
-        raise FileNotFoundError(
-        f"No corresponding crop found for "
-            f"{mask_path.name}: {crop_path}")
+    crop_stem = ("_").join(crop_path.stem.split("_")[:-2])
+    mask_path = Path(mask_dir / f"{crop_stem}_mask.png")
 
     image = io.imread(str(crop_path))
     if mask_path is not None and mask_path.exists():
         mask = io.imread(str(mask_path))
+        print("Mask read in.")
     else:
+        print("No mask provided, using full image as mask.")
         mask = np.ones((image.shape[0], image.shape[1]), dtype=bool)
 
     image = convert_to_grayscale(image)
@@ -92,15 +82,13 @@ def load_mcherry_crop_and_mask(mask_path, crop_dir, channel='mCherry'):
     if mask.ndim == 3:
         mask = convert_to_grayscale(mask)
 
-    mask = mask > 0
-
     if image.shape[:2] != mask.shape[:2]:
         raise ValueError(
             f"Image/mask size mismatch for {crop_path.name}: "
             f"{image.shape[:2]} vs {mask.shape[:2]}"
         )
 
-    return image, mask, mask_path
+    return image, mask
 
 
 def detect_mcherry_puncta(
@@ -264,7 +252,6 @@ def clear_mcherry_analysis(
 def plot_mcherry_analysis(
     ax,
     image,
-    mask,
     puncta,
     title=None
 ):
@@ -273,13 +260,6 @@ def plot_mcherry_analysis(
     ax.imshow(
         image,
         cmap="gray"
-    )
-
-    ax.contour(
-        mask.astype(float),
-        levels=[0.5],
-        colors="lime",
-        linewidths=0.7
     )
 
     for punctum in puncta:
@@ -483,8 +463,8 @@ def create_mcherry_figure(
 
 
 def analyze_mcherry_image(
-    mask_path,
-    crop_dir,
+    crop_path,
+    mask_dir,
     min_diameter=2.6,
     max_diameter=8.0,
     threshold=0.09
@@ -495,10 +475,10 @@ def analyze_mcherry_image(
     Returns the loaded image, mask, puncta, and statistics.
     """
 
-    image, mask, mask_path = (
+    image, mask = (
         load_mcherry_crop_and_mask(
-            mask_path,
-            crop_dir
+            crop_path,
+            mask_dir
         )
     )
     
@@ -521,7 +501,7 @@ def analyze_mcherry_image(
     return {
         "image": image,
         "mask": mask,
-        "mask_path": mask_path,
+        "image_path": crop_path,
         "puncta": puncta,
         "count": len(puncta),
         "mean_intensity": mean_intensity,
@@ -623,13 +603,13 @@ def batch_analyze_mcherry(
 
     results = []
 
-    total = len(mask_files)
+    total = len(crop_files)
 
-    for index, mask_path in enumerate(mask_files):
-        mask_path_smpl = Path("_".join(mask_path.stem.split("_")[:-2]))
+    for index, crop_path in enumerate(crop_files):
+        crop_path_smpl = Path("_".join(crop_path.stem.split("_")[:-2]))
         try:
             analysis = analyze_mcherry_image(
-                mask_path=mask_path,
+                mask_path=crop_path,
                 crop_dir=crop_dir,
                 min_diameter=min_diameter,
                 max_diameter=max_diameter,

@@ -72,6 +72,7 @@ def execute_ai_segmentation(processed_wells_dir: str, well_name: str, time: str,
       1: Single-cell filter mode (finds and exports wells containing exactly 1 cell).
       2: Process designated coordinates from an Excel file in 'Processed Wells'.
       3: Process all valid cropped BF images matching well_name and time.
+      4: Process wells that have at least one cell.
     Outputs/Updates Excel: Processed Wells/<well_name>_CellCount.xlsx
     Optionally exports debug pairs to: Processed Wells/AI Segmentations/<well_name>_Time<time>_Masks/
     """
