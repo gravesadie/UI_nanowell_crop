@@ -622,7 +622,7 @@ def batch_analyze_mcherry(
             puncta = analysis["puncta"]
 
             title = (
-                f"{mask_path_smpl.name}\n"
+                f"{crop_path_smpl.name}\n"
                 f"Puncta: {analysis['count']} | "
                 f"Mean Intensity: "
                 f"{analysis['mean_intensity']:.2f} | "
@@ -639,7 +639,7 @@ def batch_analyze_mcherry(
 
             output_path = (
                 visualization_dir /
-                f"{mask_path_smpl.stem}_mCherry_puncta.png"
+                f"{crop_path_smpl.stem}_mCherry_puncta.png"
             )
 
             save_mcherry_figure(
@@ -648,7 +648,7 @@ def batch_analyze_mcherry(
             )
 
             results.append({
-                "image": mask_path_smpl.name,
+                "image": crop_path_smpl.name,
                 "number_of_mCherry_puncta":
                     analysis["count"],
                 "mean_intensity_of_puncta":
@@ -665,7 +665,7 @@ def batch_analyze_mcherry(
 
             if log_callback:
                 log_callback(
-                    f"[mCherry]: {mask_path_smpl.name} → "
+                    f"[mCherry]: {crop_path_smpl.name} → "
                     f"{analysis['count']} puncta | "
                     f"Mean intensity = "
                     f"{analysis['mean_intensity']:.2f} | "
@@ -678,11 +678,11 @@ def batch_analyze_mcherry(
             if log_callback:
                 log_callback(
                     f"[mCherry ERROR]: "
-                    f"{mask_path.name}: {e}"
+                    f"{crop_path_smpl.name}: {e}"
                 )
 
             results.append({
-                "image": mask_path_smpl.name,
+                "image": crop_path_smpl.name,
                 "number_of_mCherry_puncta": np.nan,
                 "mean_intensity_of_puncta": np.nan,
                 "mean_size_of_puncta": np.nan,

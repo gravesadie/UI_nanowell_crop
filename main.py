@@ -775,10 +775,18 @@ class MicroscopyApp(QMainWindow):
     def switch_to_page3(self):
         """Pre-fills Page 3 inputs from Page 2 and switches page."""
         processed_dir = self.ai_processed_dir.text().strip().replace('\\', '/')
-        if processed_dir:
-            self.mcherry_crop_dir.setText(processed_dir)
-            self.mcherry_mask_dir.setText(processed_dir)
-            self.mcherry_output_dir.setText(processed_dir)
+        # get current well name and time index
+        well_name = self.ai_well_name.text().strip()
+        if processed_dir and well_name:
+            inferred_mch_dir = os.path.join(Path(processed_dir), well_name, 'mCherry')
+            self.mcherry_crop_dir.setText(inferred_mch_dir)
+            self.mcherry_output_dir.setText(inferred_mch_dir.parent)
+        elif processed_dir:
+            # autofill with first well in Processed Wells folder
+            sample_well = [x for x in os.listdir(processed_dir) if len(x) == 3][0]
+            inferred_mch_dir = os.path.join(Path(processed_dir), sample_well, 'mCherry')
+            self.mcherry_crop_dir.setText(inferred_mch_dir)
+            self.mcherry_output_dir.setText(inferred_mch_dir.parent)
 
         self.left_stack.setCurrentIndex(2)
 
@@ -788,8 +796,6 @@ class MicroscopyApp(QMainWindow):
         """Pre-fills Page 4 inputs from Page 3 and switches page."""
         if self.mcherry_crop_dir.text().strip().replace('\\', '/') != "":
             self.GFP_crop_dir.setText(self.mcherry_crop_dir.text().strip().replace('\\', '/'))
-        if self.mcherry_mask_dir.text().strip().replace('\\', '/') != "":
-            self.GFP_mask_dir.setText(self.mcherry_mask_dir.text().strip().replace('\\', '/'))
         if self.mcherry_output_dir.text().strip().replace('\\', '/') != "":
             self.GFP_output_dir.setText(self.mcherry_output_dir.text().strip().replace('\\', '/'))
 
@@ -1127,7 +1133,7 @@ class MicroscopyApp(QMainWindow):
             print('No mCherry files.')
             return
 
-        crop_path = self.crop_files[self.mcherry_current_index]
+        crop_path = self.mcherry_files[self.mcherry_current_index]
 
         try:
             analysis = analyze_mcherry_image(
@@ -1220,7 +1226,6 @@ class MicroscopyApp(QMainWindow):
         clear_mcherry_analysis(
             ax,
             analysis["image"],
-            analysis["puncta"],
             title=f"{crop_path.name}"
         )
 
