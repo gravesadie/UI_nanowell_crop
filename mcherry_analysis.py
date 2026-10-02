@@ -1,3 +1,4 @@
+import cv2
 import numpy as np
 import pandas as pd
 
@@ -9,6 +10,8 @@ from skimage.feature import blob_log
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
 from skimage.measure import regionprops, label
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 
 import glob
 import os
@@ -258,45 +261,40 @@ def clear_mcherry_analysis(
 
     ax.axis("off")
 
-def plot_mcherry_analysis(
-    ax,
-    image,
-    mask,
-    puncta,
-    title=None
-):
-    ax.clear()
-
-    ax.imshow(
-        image,
-        cmap="gray"
-    )
-
-    ax.contour(
-        mask.astype(float),
-        levels=[0.5],
-        colors="lime",
-        linewidths=0.7
-    )
-
-    for punctum in puncta:
-        circle = Circle(
-            (
-                punctum["x"],
-                punctum["y"]
-            ),
-            punctum["radius"],
-            fill=False,
-            edgecolor="red",
-            linewidth=0.3
-        )
-        ax.add_patch(circle)
-
-    if title is not None:
-        ax.set_title(title)
-
+def plot_mcherry_analysis(image, mask, puncta, title=None):
+    if image is None: return None
+    if image.ndim == 2: display_img = cv2.cvtColor(image, cv2.COLOR_GRAY2RGB)
+    elif image.shape[2] == 4: display_img = cv2.cvtColor(image, cv2.COLOR_RGBA2RGB)
+    else: display_img = image.copy()
+    display_img = np.ascontiguousarray(display_img)
+    h, w = display_img.shape[:2]
+    fig = Figure(figsize=(w / 100, h / 100), dpi=100, frameon=False)
+    canvas = FigureCanvas(fig)
+    ax = fig.add_axes([0, 0, 1, 1])
+    ax.imshow(display_img)
+    if mask is not None:
+        ax.contour(mask, levels=[0.5], colors="lime", linewidths=1)
+    if puncta is not None:
+        for p in puncta:
+            if isinstance(p, dict):
+                x, y = p.get("x", p.get("cx")), p.get("y", p.get("cy"))
+                r = p.get("radius", p.get("r", 3))
+            else:
+                x, y = p[0], p[1]
+                r = p[2] if len(p) > 2 else 3
+            if x is not None and y is not None:
+                circle = plt.Circle((x, y), r, fill=False, edgecolor="red", linewidth=1.5)
+                ax.add_patch(circle)
+    ax.set_xlim(0, w)
+    ax.set_ylim(h, 0)
     ax.axis("off")
-
+    if title:
+        ax.set_title(title, fontsize=10, color="white", pad=4)
+    fig.canvas.draw()
+    buf = np.asarray(fig.canvas.buffer_rgba())
+    render_img = cv2.cvtColor(buf, cv2.COLOR_RGBA2RGB)
+    plt.close(fig)
+    return render_img
 
 def calculate_puncta_statistics(image, puncta):
     """

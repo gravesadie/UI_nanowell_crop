@@ -6,7 +6,7 @@ from pathlib import Path
 from skimage import io, color
 from skimage.measure import regionprops, label
 import matplotlib.pyplot as plt
-from mcherry_analysis_v2_multicell import load_mcherry_crop_and_mask
+from mcherry_analysis import load_mcherry_crop_and_mask
 
 def measure_intensity(region, image, mask):
     '''Quantify the intensity of GFP expression using cell mask as bound'''

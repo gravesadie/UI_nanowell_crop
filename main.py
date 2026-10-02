@@ -2,7 +2,10 @@ import os
 import sys
 import glob
 from pathlib import Path
+import cv2
 import pandas as pd
+from sympy import python
+import numpy as np
 
 # Suppress low-level OpenCV C++ warnings and libtiff logs before importing cv2
 os.environ["OPENCV_LOG_LEVEL"] = "OFF"
@@ -22,8 +25,8 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 import matplotlib.pyplot as plt
 
 import core_crop
-import image_analysis
-from mcherry_analysis_v2_multicell import (
+import segmentation
+from mcherry_analysis import (
     analyze_mcherry_image,
     plot_mcherry_analysis,
     batch_analyze_mcherry,
@@ -91,7 +94,7 @@ class AIWorkerThread(QThread):
 
     def run(self):
         try:
-            image_analysis.execute_ai_segmentation(
+            segmentation.execute_ai_segmentation(
                 processed_wells_dir=self.proc_dir,
                 well_name=self.well_name,
                 time=self.time,
@@ -1178,38 +1181,22 @@ class MicroscopyApp(QMainWindow):
 
 
     def display_mcherry_analysis(self, analysis):
-        crop_path = self.mask_files[
-            self.mcherry_current_index
-        ]
+        if not self.mcherry_files or self.mcherry_current_index < 0: return
+        crop_path = self.mcherry_files[self.mcherry_current_index]
+        self.mcherry_current_label.setText(f"{crop_path.name} ({self.mcherry_current_index + 1}/{len(self.mcherry_files)})")
+        self.mcherry_count_label.setText(f"Puncta: {analysis['count']}")
+        self.mcherry_current_result = analysis
+        render_img = plot_mcherry_analysis(image=analysis["image"], mask=analysis["mask"], puncta=analysis["puncta"], title=f"{crop_path.name} | Puncta: {analysis['count']} | Mean intensity: {analysis['mean_intensity']:.2f} | Mean size: {analysis['mean_size']:.2f} px")
+        if render_img is None: return
+        if render_img.ndim == 2: render_img = cv2.cvtColor(render_img, cv2.COLOR_GRAY2BGR)
+        elif render_img.shape[2] == 4: render_img = cv2.cvtColor(render_img, cv2.COLOR_RGBA2BGR)
+        elif render_img.shape[2] == 3: render_img = cv2.cvtColor(render_img, cv2.COLOR_RGB2BGR)
+        render_img = np.ascontiguousarray(render_img)
+        h, w = render_img.shape[:2]
+        qimg = QImage(render_img.data, w, h, render_img.strides[0], QImage.Format.Format_BGR888)
+        self.canvas.set_image(QPixmap.fromImage(qimg.copy()))
+        self.log(f"✅ [mCherry]: Displayed {crop_path.name} with {analysis['count']} puncta.")
 
-        self.mcherry_current_label.setText(
-            f"{crop_path.name} "
-            f"({self.mcherry_current_index + 1}/"
-            f"{len(self.mcherry_files)})"
-        )
-
-        self.mcherry_count_label.setText(
-            f"Puncta: {analysis['count']}"
-        )
-
-        self.mcherry_figure.clear()
-
-        ax = self.mcherry_figure.add_subplot(111)
-
-        plot_mcherry_analysis(
-            ax,
-            analysis["image"],
-            analysis["mask"],
-            analysis["puncta"],
-            title=(
-                f"{crop_path.name} | "
-                f"Puncta: {analysis['count']} | "
-                f"Mean intensity: "
-                f"{analysis['mean_intensity']:.2f} | "
-                f"Mean size: "
-                f"{analysis['mean_size']:.2f} px"
-            )
-        )
 
     def clear_mcherry_overlay(self, analysis):
         crop_path = self.mask_files[
