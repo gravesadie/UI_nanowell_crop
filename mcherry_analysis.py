@@ -45,8 +45,17 @@ def convert_to_grayscale(image):
         f"Unsupported image dimensions: {image.shape}"
     )
 
+def create_circular_mask(h=400, w=400, radius=190):
+    center = (int(w/2), int(h/2))
+    # Generate open 2D coordinate grids (Y, X)
+    Y, X = np.ogrid[:h, :w]
+    # Calculate the squared distance from the center
+    dist_from_center = (X - center[0])**2 + (Y - center[1])**2
+    # Check if the squared distance is within the squared radius
+    mask = dist_from_center <= radius**2
+    return mask
 
-def load_mcherry_crop_and_mask(crop_path, mask_dir, channel='mCherry'):
+def load_mcherry_crop_and_mask(crop_path, mask_dir, log_callback=print):
     """
     Load an mCherry crop and its mask, if provided.
 
@@ -72,10 +81,10 @@ def load_mcherry_crop_and_mask(crop_path, mask_dir, channel='mCherry'):
     image = io.imread(str(crop_path))
     if mask_path is not None and mask_path.exists():
         mask = io.imread(str(mask_path))
-        print("Mask read in.")
+        log_callback("Mask read in.")
     else:
-        print("No mask provided, using full image as mask.")
-        mask = np.ones((image.shape[0], image.shape[1]), dtype=bool)
+        log_callback("No mask provided, using full image as mask.")
+        mask = create_circular_mask() #np.ones((image.shape[0], image.shape[1]), dtype=bool)
 
     image = convert_to_grayscale(image)
 
@@ -88,6 +97,7 @@ def load_mcherry_crop_and_mask(crop_path, mask_dir, channel='mCherry'):
             f"{image.shape[:2]} vs {mask.shape[:2]}"
         )
 
+    log_callback(f"Loaded {crop_path.name}.")
     return image, mask
 
 
@@ -279,7 +289,6 @@ def plot_mcherry_analysis(
         ax.set_title(title)
 
     ax.axis("off")
-
 
 def calculate_puncta_statistics(image, puncta):
     """

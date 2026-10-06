@@ -780,13 +780,18 @@ class MicroscopyApp(QMainWindow):
         if processed_dir and well_name:
             inferred_mch_dir = os.path.join(Path(processed_dir), well_name, 'mCherry')
             self.mcherry_crop_dir.setText(inferred_mch_dir)
-            self.mcherry_output_dir.setText(inferred_mch_dir.parent)
+            self.mcherry_output_dir.setText(os.path.join(Path(processed_dir), well_name))
         elif processed_dir:
             # autofill with first well in Processed Wells folder
-            sample_well = [x for x in os.listdir(processed_dir) if len(x) == 3][0]
-            inferred_mch_dir = os.path.join(Path(processed_dir), sample_well, 'mCherry')
-            self.mcherry_crop_dir.setText(inferred_mch_dir)
-            self.mcherry_output_dir.setText(inferred_mch_dir.parent)
+            well_dirs = [x for x in os.listdir(processed_dir) if len(x) == 3 and os.path.isdir(os.path.join(processed_dir, x))]
+            try: 
+                sample_well = well_dirs[0]
+                inferred_mch_dir = os.path.join(Path(processed_dir), sample_well, 'mCherry')
+                self.mcherry_crop_dir.setText(inferred_mch_dir)
+                self.mcherry_output_dir.setText(os.path.join(Path(processed_dir), sample_well))
+            except:
+                self.mcherry_output_dir.setText(os.path.join(Path(processed_dir)))
+            
 
         self.left_stack.setCurrentIndex(2)
 
