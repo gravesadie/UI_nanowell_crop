@@ -11,6 +11,7 @@ from matplotlib.patches import Circle
 
 import glob
 import os
+import cv2
 
 
 def convert_to_grayscale(image):
@@ -84,7 +85,7 @@ def load_mcherry_crop_and_mask(crop_path, mask_dir, log_callback=print):
         log_callback("Mask read in.")
     else:
         log_callback("No mask provided, using full image as mask.")
-        mask = create_circular_mask() #np.ones((image.shape[0], image.shape[1]), dtype=bool)
+        mask = np.ones((image.shape[0], image.shape[1]), dtype=bool) #create_circular_mask()
 
     image = convert_to_grayscale(image)
 
@@ -272,18 +273,21 @@ def plot_mcherry_analysis(
         cmap="gray"
     )
 
-    for punctum in puncta:
-        circle = Circle(
-            (
-                punctum["x"],
-                punctum["y"]
-            ),
-            punctum["radius"],
-            fill=False,
-            edgecolor="red",
-            linewidth=0.6
-        )
-        ax.add_patch(circle)
+    if len(puncta) < 200:
+        for punctum in puncta:
+            circle = Circle(
+                (
+                    punctum["x"],
+                    punctum["y"]
+                ),
+                punctum["radius"],
+                fill=False,
+                edgecolor="red",
+                linewidth=0.6
+            )
+            ax.add_patch(circle)
+    else:
+        print("Number of puncta exceeds 200, skipping plotting.")
 
     if title is not None:
         ax.set_title(title)
@@ -490,6 +494,9 @@ def analyze_mcherry_image(
             mask_dir
         )
     )
+
+    # threshold image 
+    image = cv2.threshold(image, 0, 255, cv2.THRESH_TOZERO + cv2.THRESH_OTSU)[1]
     
     puncta = detect_mcherry_puncta(
         image=image,

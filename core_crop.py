@@ -28,7 +28,10 @@ def load_bf_image(img_dir: str, well_name: str, time: str):
     full_path = os.path.join(img_dir, bf_name)
 
     if not os.path.exists(full_path):
-        return None, None, full_path, f"Target Brightfield image not found at:\n{full_path}"
+        bf_name = f"{well_name}_Time{time}_GFP.tif"
+        full_path = os.path.join(img_dir, bf_name)
+        if not os.path.exists(full_path):
+            return None, None, full_path, f"Target Brightfield image not found at:\n{full_path}"
 
     try:
         cached_bgr = cv2.imread(full_path, cv2.IMREAD_UNCHANGED)
