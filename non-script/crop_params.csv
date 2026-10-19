@@ -1,10 +1,10 @@
-,100 um,500 um
-Nanowell R,200,780
-Boundary R,9000,8000
-Square Length,370,500
-Pitch,462,2010
-Calculated Angle,0.575,0.375
-Center X,9111,7803
-Center Y,9249,7820
-Crop Resolution,400,1600
-Cell Diameter,100,150
+,100 um,500 um,10X
+Nanowell R,200,780,105
+Boundary R,9000,8000,4500
+Square Length,370,500,370
+Pitch,462,2010,229
+Calculated Angle,0.575,0.375,0.575
+Center X,9111,7803,3985
+Center Y,9249,7820,3985
+Crop Resolution,400,1600,210
+Cell Diameter,100,150,30
