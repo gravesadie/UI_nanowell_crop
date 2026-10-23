@@ -1355,11 +1355,22 @@ class MicroscopyApp(QMainWindow):
             )
             self.mcherry_output_dir.setText(output_dir)
 
+        # find CellCount xlsx if it exists
+        parts = Path(self.mcherry_crop_dir.text()).parts
+        well_name = parts[-2] if len(parts) >= 2 else "UnknownWell"
+        excel_path = os.path.join(Path(self.mcherry_crop_dir.text()).parent.parent, f"{well_name}_CellCount.xlsx")
+        if os.path.exists(excel_path):
+            self.log(f"[INFO]: Found existing '{well_name}_CellCount.xlsx'.")
+        else:
+            excel_path = None
+            self.log(f"[INFO]: No existing '{well_name}_CellCount.xlsx' found. Analyzing all mCherry crops .")
+
         try:
             results = batch_analyze_mcherry(
                 crop_dir=crop_dir,
                 mask_dir=mask_dir,
                 output_dir=output_dir,
+                well_coords=excel_path,
                 min_diameter=float(
                     self.mcherry_min_diameter.text()
                 ),

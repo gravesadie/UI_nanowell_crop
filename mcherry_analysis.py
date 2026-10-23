@@ -555,6 +555,7 @@ def batch_analyze_mcherry(
     crop_dir,
     mask_dir,
     output_dir,
+    well_coords=None,
     min_diameter=2.6,
     max_diameter=8.0,
     threshold=0.09,
@@ -609,8 +610,6 @@ def batch_analyze_mcherry(
 
     crop_files = sorted(
         crop_dir.glob("*_mCherry.png"))
-    mask_files = sorted(
-        mask_dir.glob("*_mask.png"))
 
     if not crop_files:
         raise FileNotFoundError(
@@ -621,12 +620,21 @@ def batch_analyze_mcherry(
 
     total = len(crop_files)
 
-    for index, crop_path in enumerate(crop_files):
+    try:
+        wells_to_analyze = pd.read_excel(well_coords)
+        well_name = str(Path(well_coords).stem).split("_")[0]
+        timepoint = wells_to_analyze.columns[-1].split("_")[0]
+        iterator = list(wells_to_analyze["Coordinate"].values)
+        iterator = [Path(os.path.join(crop_dir, f"{well_name}_{coord}_{timepoint}_mCherry.png")) for coord in iterator]
+    except:
+        iterator = crop_files
+
+    for index, crop_path in enumerate(iterator):
         crop_path_smpl = Path("_".join(crop_path.stem.split("_")[:-2]))
         try:
             analysis = analyze_mcherry_image(
-                mask_path=crop_path,
-                crop_dir=crop_dir,
+                crop_path=crop_path,
+                mask_dir=mask_dir,
                 min_diameter=min_diameter,
                 max_diameter=max_diameter,
                 threshold=threshold
