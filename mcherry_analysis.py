@@ -494,9 +494,6 @@ def analyze_mcherry_image(
             mask_dir
         )
     )
-
-    # threshold image 
-    image = cv2.threshold(image, 0, 255, cv2.THRESH_TOZERO + cv2.THRESH_OTSU)[1]
     
     puncta = detect_mcherry_puncta(
         image=image,

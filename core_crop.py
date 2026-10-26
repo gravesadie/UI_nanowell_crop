@@ -272,7 +272,7 @@ def execute_nanowell_crop(load_path: str, well_name: str, time: str, nanowell_r:
                 continue
 
             square_crop = image[y1:y2, x1:x2]
-            cropped_with_mask = cv2.bitwise_and(square_crop, square_crop, mask=digital_mask)
+            cropped_with_mask = cv2.bitwise_and(square_crop, square_crop) #, mask=digital_mask)
 
             new_filename = f"{well_name}_R{row}_C{col}_Time{time}_{key_channel}.png"
             new_folder = os.path.join(save_base_path, key_channel)

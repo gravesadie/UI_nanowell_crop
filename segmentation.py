@@ -216,6 +216,8 @@ def execute_ai_segmentation(processed_wells_dir: str, well_name: str, time: str,
 
             cell_count = int(len(np.unique(masks[masks > 0]))) if masks is not None else 0
             total_cell_area = int(np.count_nonzero(masks)) if masks is not None else 0
+            min_mask_area = int(np.min(np.bincount(masks[masks > 0]))) if cell_count > 0 else 0
+            max_mask_area = int(np.max(np.bincount(masks[masks > 0]))) if cell_count > 0 else 0
 
             # Mode 1: Skip non-single-cell wells
             if mode == 1 and cell_count != 1:
@@ -226,13 +228,18 @@ def execute_ai_segmentation(processed_wells_dir: str, well_name: str, time: str,
                 continue
 
             # QC on cellpose mask size
-            if total_cell_area < 200 or total_cell_area > 55000:
+            if min_mask_area < 900 or max_mask_area > 55000:
+                continue
+            # QC on number of cells
+            if cell_count > 5:
                 continue
 
             results.append({
                 "Coordinate": coord,
                 f"Time{time}_Cell_Count": cell_count,
-                f"Time{time}_Cell_Area": total_cell_area
+                f"Time{time}_Total_Cell_Area": total_cell_area,
+                f"Time{time}_Min_Mask_Area": min_mask_area,
+                f"Time{time}_Max_Mask_Area": max_mask_area
             })
 
             # Export validation image pair if checkbox was checked

@@ -1363,7 +1363,7 @@ class MicroscopyApp(QMainWindow):
             self.log(f"[INFO]: Found existing '{well_name}_CellCount.xlsx'.")
         else:
             excel_path = None
-            self.log(f"[INFO]: No existing '{well_name}_CellCount.xlsx' found. Analyzing all mCherry crops .")
+            self.log(f"[INFO]: No existing '{well_name}_CellCount.xlsx' found. Analyzing all mCherry crops.")
 
         try:
             results = batch_analyze_mcherry(
